@@ -46,8 +46,12 @@ from .ui.scrolling import (
 from .ui.company_intelligence import (
     build_company_intelligence,
 )
+from .ui.theme import (
+    apply_compass_theme,
+    workspace_palette,
+)
 
-APP_TITLE = "Darwill Compass 5.0 — Deal Desk Workspace"
+APP_TITLE = "Darwill Compass 6.0 — Workspace Foundation"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -100,7 +104,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "5.0"
+PRODUCT_VERSION = "6.0"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -5317,6 +5321,13 @@ class App(tk.Tk):
         self.deliverability_rules = load_deliverability_rules()
         self.hubspot_sequences: list[dict[str, Any]] = []
         self._configure_style()
+        self.sidebar_collapsed = False
+        self._sidebar_buttons = []
+        self._sidebar_section_labels = []
+        self.global_search_var = tk.StringVar()
+        self.workspace_status_var = tk.StringVar(
+            value="Ready · Proven engine preserved"
+        )
         self._build()
         self._load_settings()
         self._load_profiles()
@@ -5338,6 +5349,7 @@ class App(tk.Tk):
 
     def _configure_style(self):
         style = ttk.Style(self)
+        apply_compass_theme(style)
         style.theme_use("clam")
 
         style.configure(
@@ -5645,7 +5657,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 5.0",
+            text="VERSION 6.0",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -5666,15 +5678,111 @@ class App(tk.Tk):
             font=("Segoe UI Semibold", 9),
         ).pack(anchor="e")
 
+        command_bar = tk.Frame(
+            self,
+            bg=workspace_palette()["command_bg"],
+            padx=14,
+            pady=7,
+            highlightthickness=1,
+            highlightbackground=workspace_palette()["border"],
+        )
+        command_bar.pack(fill="x")
+
+        tk.Button(
+            command_bar,
+            text="☰",
+            command=self._toggle_sidebar,
+            bg=workspace_palette()["command_bg"],
+            fg=TEXT,
+            activebackground=BLUE_LIGHT,
+            activeforeground=TEXT,
+            relief="flat",
+            bd=0,
+            padx=8,
+            pady=4,
+            cursor="hand2",
+            font=("Segoe UI Semibold", 11),
+        ).pack(side="left")
+
+        tk.Label(
+            command_bar,
+            text="WORKSPACE SEARCH",
+            bg=workspace_palette()["command_bg"],
+            fg=MUTED,
+            font=("Segoe UI Semibold", 7),
+        ).pack(side="left", padx=(10, 8))
+
+        search_shell = tk.Frame(
+            command_bar,
+            bg=WHITE,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+        )
+        search_shell.pack(side="left", fill="x", expand=True)
+
+        search_entry = tk.Entry(
+            search_shell,
+            textvariable=self.global_search_var,
+            relief="flat",
+            bd=0,
+            bg=WHITE,
+            fg=TEXT,
+            insertbackground=TEXT,
+            font=("Segoe UI", 10),
+        )
+        search_entry.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=10,
+            pady=6,
+        )
+        search_entry.bind(
+            "<Return>",
+            lambda _event: self._run_global_workspace_search(),
+        )
+
+        tk.Button(
+            search_shell,
+            text="Search",
+            command=self._run_global_workspace_search,
+            bg=ACCENT,
+            fg=WHITE,
+            activebackground=ACCENT_HOVER,
+            activeforeground=WHITE,
+            relief="flat",
+            bd=0,
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            font=("Segoe UI Semibold", 8),
+        ).pack(side="right")
+
+        tk.Label(
+            command_bar,
+            textvariable=self.workspace_status_var,
+            bg=workspace_palette()["command_bg"],
+            fg=SUCCESS,
+            font=("Segoe UI Semibold", 8),
+        ).pack(side="right", padx=(12, 0))
+
         shell = tk.Frame(self, bg=CONTENT_BG)
         shell.pack(fill="both", expand=True)
 
         sidebar = tk.Frame(shell, bg=SIDEBAR, width=230)
         sidebar.pack(side="left", fill="y")
         sidebar.pack_propagate(False)
+        self.sidebar_frame = sidebar
+        self.sidebar_expanded_width = 230
+        self.sidebar_collapsed_width = 62
 
-        content = ttk.Frame(shell, style="TFrame", padding=(18, 16, 18, 18))
+        content = ttk.Frame(
+            shell,
+            style="TFrame",
+            padding=(14, 12, 14, 14),
+        )
         content.pack(side="right", fill="both", expand=True)
+        self.workspace_content = content
 
         notebook = ttk.Notebook(content, style="Main.TNotebook")
         notebook.pack(fill="both", expand=True)
@@ -5723,12 +5831,18 @@ class App(tk.Tk):
                         fg="#D7E5F2",
                         activebackground=SIDEBAR_HOVER,
                     )
+            self.workspace_status_var.set(
+                f"{pages[index][1]} · Ready"
+            )
+
+        self._select_workspace_page = select_page
+        self._workspace_pages = pages
 
         current_section = None
         for index, (_frame, label, section) in enumerate(pages):
             if section != current_section:
                 current_section = section
-                tk.Label(
+                section_label = tk.Label(
                     sidebar,
                     text=section,
                     bg=SIDEBAR_SECTION,
@@ -5737,7 +5851,12 @@ class App(tk.Tk):
                     padx=18,
                     pady=7,
                     font=("Segoe UI Semibold", 8),
-                ).pack(fill="x", pady=(10 if index else 14, 4))
+                )
+                section_label.pack(
+                    fill="x",
+                    pady=(10 if index else 14, 4),
+                )
+                self._sidebar_section_labels.append(section_label)
             button = tk.Button(
                 sidebar,
                 text=label,
@@ -5755,13 +5874,16 @@ class App(tk.Tk):
                 font=("Segoe UI Semibold", 10),
             )
             button.pack(fill="x", padx=10, pady=2)
+            button._compass_full_text = label
+            button._compass_short_text = label[:1].upper()
+            self._sidebar_buttons.append(button)
             nav_buttons[index] = button
 
         footer = tk.Frame(sidebar, bg=SIDEBAR_SECTION)
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 5.0",
+            text="Darwill Compass 6.0",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -7242,12 +7364,42 @@ class App(tk.Tk):
             lambda: self._set_initial_deal_desk_split(desk_pane),
         )
 
+        queue_toolbar = tk.Frame(
+            queue_frame,
+            bg=SURFACE,
+        )
+        queue_toolbar.pack(fill="x", pady=(0, 6))
+
+        tk.Label(
+            queue_toolbar,
+            text="Review Queue",
+            bg=SURFACE,
+            fg=NAVY,
+            font=("Segoe UI Semibold", 10),
+        ).pack(side="left")
+
+        tk.Label(
+            queue_toolbar,
+            text="Search globally or filter by workflow status.",
+            bg=SURFACE,
+            fg=MUTED,
+            font=("Segoe UI", 8),
+        ).pack(side="left", padx=(8, 0))
+
         queue_columns = (
             "order", "status", "company", "contact", "strategy",
             "confidence", "inbox", "hubspot", "enrollment",
         )
+        queue_table_frame = ttk.Frame(
+            queue_frame,
+            style="Card.TFrame",
+        )
+        queue_table_frame.pack(fill="both", expand=True)
+
         self.deal_tree = ttk.Treeview(
-            queue_frame, columns=queue_columns, show="headings",
+            queue_table_frame,
+            columns=queue_columns,
+            show="headings",
         )
         queue_headings = {
             "order": "Outreach Order",
@@ -7269,7 +7421,7 @@ class App(tk.Tk):
             self.deal_tree.heading(name, text=queue_headings[name])
             self.deal_tree.column(name, width=widths[name], stretch=True)
         configure_scrollable_tree(
-            queue_frame,
+            queue_table_frame,
             self.deal_tree,
             horizontal=True,
             vertical=True,
@@ -10898,6 +11050,94 @@ class App(tk.Tk):
         )
         splash.after(1250, splash.destroy)
 
+    def _toggle_sidebar(self):
+        """Collapse or expand the navigation without losing page state."""
+        if not hasattr(self, "sidebar_frame"):
+            return
+
+        self.sidebar_collapsed = not self.sidebar_collapsed
+        width = (
+            self.sidebar_collapsed_width
+            if self.sidebar_collapsed
+            else self.sidebar_expanded_width
+        )
+        self.sidebar_frame.configure(width=width)
+
+        for label in self._sidebar_section_labels:
+            if self.sidebar_collapsed:
+                label.pack_forget()
+            elif not label.winfo_manager():
+                label.pack(fill="x", pady=(10, 4))
+
+        for button in self._sidebar_buttons:
+            try:
+                button.configure(
+                    text=(
+                        button._compass_short_text
+                        if self.sidebar_collapsed
+                        else button._compass_full_text
+                    ),
+                    anchor=(
+                        "center"
+                        if self.sidebar_collapsed
+                        else "w"
+                    ),
+                    padx=(
+                        4
+                        if self.sidebar_collapsed
+                        else 22
+                    ),
+                )
+                button.pack_configure(
+                    padx=6 if self.sidebar_collapsed else 10
+                )
+            except (tk.TclError, AttributeError):
+                continue
+
+        self.workspace_status_var.set(
+            "Navigation collapsed"
+            if self.sidebar_collapsed
+            else "Navigation expanded"
+        )
+
+    def _run_global_workspace_search(self):
+        """Search currently loaded Deal Desk rows by company or contact."""
+        query = self.global_search_var.get().strip()
+        if not query:
+            self.workspace_status_var.set(
+                "Enter a company, contact, state, trade, or keyword"
+            )
+            return
+
+        lowered = query.lower()
+
+        try:
+            if hasattr(self, "_select_workspace_page"):
+                self._select_workspace_page(2)
+        except Exception:
+            pass
+
+        if hasattr(self, "deal_tree"):
+            for item_id in self.deal_tree.get_children():
+                values = self.deal_tree.item(item_id, "values")
+                haystack = " ".join(str(value) for value in values).lower()
+                if lowered in haystack:
+                    self.deal_tree.selection_set(item_id)
+                    self.deal_tree.focus(item_id)
+                    self.deal_tree.see(item_id)
+                    try:
+                        self._load_selected_queue_item()
+                    except Exception:
+                        pass
+                    self.workspace_status_var.set(
+                        f"Found: {query}"
+                    )
+                    return
+
+        self.workspace_status_var.set(
+            f"No visible Deal Desk match: {query}"
+        )
+
     def _show_about(self):
         dialog = tk.Toplevel(self)
         dialog.title("About Darwill Compass")
@@ -11080,7 +11320,7 @@ class App(tk.Tk):
                 column=index % 10,
                 sticky="ew",
                 padx=(0, 7),
-                pady=4,
+                pady=3,
             )
             self.state_chip_buttons[code] = button
 
@@ -11223,7 +11463,7 @@ class App(tk.Tk):
                 column=index % 4,
                 sticky="ew",
                 padx=(0, 8),
-                pady=4,
+                pady=3,
             )
             self.trade_chip_buttons[name] = button
 
