@@ -39,7 +39,7 @@ from pypdf import PdfReader
 import dns.resolver
 from cryptography.fernet import Fernet, InvalidToken
 
-APP_TITLE = "Darwill AI Prospector 3.6"
+APP_TITLE = "Darwill Compass 4.4 — Proven 3.6 Engine"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -87,7 +87,12 @@ SURFACE = "#FFFFFF"
 SURFACE_ALT = "#F4F8FC"
 BORDER = "#D8E4EF"
 SHADOW = "#C9D8E6"
-PRODUCT_VERSION = "3.6"
+SIDEBAR = "#071B2E"
+SIDEBAR_SECTION = "#0A243D"
+SIDEBAR_HOVER = "#123A5F"
+SIDEBAR_ACTIVE = "#1F6FD1"
+CONTENT_BG = "#EEF3F8"
+PRODUCT_VERSION = "4.4"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -5307,7 +5312,10 @@ class App(tk.Tk):
         self._build()
         self._load_settings()
         self._load_profiles()
+        self._render_trade_checkboxes()
         self._refresh_trade_preview()
+        self._sync_state_chips()
+        self._refresh_connection_status()
         self._update_search_mode()
         self._update_advanced_visibility()
         self._refresh_history()
@@ -5358,6 +5366,30 @@ class App(tk.Tk):
             background=SURFACE,
             foreground=MUTED,
             font=("Segoe UI", 9),
+        )
+        style.configure(
+            "PageEyebrow.TLabel",
+            background=SURFACE,
+            foreground=ACCENT,
+            font=("Segoe UI Semibold", 8),
+        )
+        style.configure(
+            "PageTitle.TLabel",
+            background=SURFACE,
+            foreground=NAVY,
+            font=("Segoe UI Semibold", 18),
+        )
+        style.configure(
+            "PageSubtitle.TLabel",
+            background=SURFACE,
+            foreground=MUTED,
+            font=("Segoe UI", 10),
+        )
+        style.configure(
+            "CardHeader.TLabel",
+            background=SURFACE,
+            foreground=NAVY,
+            font=("Segoe UI Semibold", 11),
         )
 
         style.configure(
@@ -5410,15 +5442,16 @@ class App(tk.Tk):
         style.configure(
             "TLabelframe",
             background=SURFACE,
-            bordercolor=BORDER,
+            bordercolor="#C9D9E7",
             relief="solid",
             borderwidth=1,
+            padding=4,
         )
         style.configure(
             "TLabelframe.Label",
             background=SURFACE,
             foreground=NAVY,
-            font=("Segoe UI Semibold", 10),
+            font=("Segoe UI Semibold", 11),
         )
 
         style.configure(
@@ -5427,6 +5460,13 @@ class App(tk.Tk):
             borderwidth=0,
             tabmargins=(0, 8, 0, 0),
         )
+        style.configure(
+            "Main.TNotebook",
+            background=CONTENT_BG,
+            borderwidth=0,
+            tabmargins=(0, 0, 0, 0),
+        )
+        style.layout("Main.TNotebook.Tab", [])
         style.configure(
             "TNotebook.Tab",
             background="#E8F0F7",
@@ -5474,35 +5514,94 @@ class App(tk.Tk):
 
         style.configure(
             "TEntry",
-            padding=7,
-            fieldbackground=WHITE,
-            bordercolor=BORDER,
+            padding=10,
+            fieldbackground="#FBFDFF",
+            foreground=TEXT,
+            bordercolor="#B9CAD9",
+            lightcolor="#B9CAD9",
+            darkcolor="#B9CAD9",
         )
         style.configure(
             "TCombobox",
-            padding=6,
-            fieldbackground=WHITE,
-            bordercolor=BORDER,
+            padding=9,
+            fieldbackground="#FBFDFF",
+            foreground=TEXT,
+            bordercolor="#B9CAD9",
+            lightcolor="#B9CAD9",
+            darkcolor="#B9CAD9",
+        )
+        style.configure(
+            "Vertical.TScrollbar",
+            background="#B8C7D5",
+            troughcolor="#E7EEF5",
+            bordercolor="#E7EEF5",
+            arrowcolor=NAVY,
+        )
+
+        style.configure(
+            "ProfileCard.TLabelframe",
+            background=SURFACE,
+            bordercolor="#D4E1EC",
+            relief="solid",
+            borderwidth=1,
+            padding=8,
+        )
+        style.configure(
+            "ProfileCard.TLabelframe.Label",
+            background=SURFACE,
+            foreground=NAVY,
+            font=("Segoe UI Semibold", 12),
+        )
+        style.configure(
+            "MetricEntry.TEntry",
+            padding=12,
+            fieldbackground="#F8FBFE",
+            foreground=NAVY,
+            font=("Segoe UI Semibold", 12),
+            bordercolor="#B9CAD9",
+            lightcolor="#B9CAD9",
+            darkcolor="#B9CAD9",
+        )
+        style.configure(
+            "Hero.TButton",
+            background=ACCENT,
+            foreground=WHITE,
+            font=("Segoe UI Semibold", 13),
+            padding=(24, 14),
+            borderwidth=0,
+        )
+        style.map(
+            "Hero.TButton",
+            background=[
+                ("active", ACCENT_HOVER),
+                ("pressed", ACCENT_HOVER),
+                ("disabled", "#9EB9D2"),
+            ],
         )
 
     def _build(self):
-        # Product header
-        header = tk.Frame(self, bg=NAVY, height=104)
+        # Product header — modern Compass shell, proven 3.6 engine.
+        header = tk.Frame(self, bg=SIDEBAR, height=96)
         header.pack(fill="x")
         header.pack_propagate(False)
 
-        brand_wrap = tk.Frame(header, bg=NAVY)
-        brand_wrap.pack(side="left", fill="y", padx=(22, 0))
+        brand_wrap = tk.Frame(header, bg=SIDEBAR)
+        brand_wrap.pack(side="left", fill="y", padx=(24, 0))
 
         logo = tk.Canvas(
             brand_wrap,
             width=54,
             height=54,
-            bg=NAVY,
+            bg=SIDEBAR,
             highlightthickness=0,
         )
         logo.pack(side="left", pady=20)
-        logo.create_oval(3, 3, 51, 51, fill=ACCENT, outline="#8EC7F4", width=2)
+        logo.create_oval(
+            3, 3, 51, 51,
+            fill=ACCENT,
+            outline="#75B6F5",
+            width=2,
+        )
         logo.create_text(
             27, 28,
             text="D",
@@ -5510,74 +5609,170 @@ class App(tk.Tk):
             font=("Segoe UI Semibold", 24),
         )
 
-        title_wrap = tk.Frame(brand_wrap, bg=NAVY)
-        title_wrap.pack(side="left", padx=(14, 0), pady=17)
+        title_wrap = tk.Frame(brand_wrap, bg=SIDEBAR)
+        title_wrap.pack(side="left", padx=(16, 0), pady=13)
         tk.Label(
             title_wrap,
-            text="Darwill AI Prospector",
-            bg=NAVY,
+            text="DARWILL",
+            bg=SIDEBAR,
             fg=WHITE,
-            font=("Segoe UI Semibold", 22),
+            font=("Segoe UI Black", 19),
         ).pack(anchor="w")
         tk.Label(
             title_wrap,
-            text="Permanent Master CSV → Deep Contact Recovery → Verification → Review",
-            bg=NAVY,
-            fg="#CFE3F6",
-            font=("Segoe UI", 9),
+            text="Compass",
+            bg=SIDEBAR,
+            fg="#78B7F4",
+            font=("Segoe UI Semibold", 15),
+        ).pack(anchor="w", pady=(0, 0))
+        tk.Label(
+            title_wrap,
+            text="Proven 3.6 intelligence engine",
+            bg=SIDEBAR,
+            fg="#9AB8D2",
+            font=("Segoe UI", 8),
         ).pack(anchor="w", pady=(2, 0))
 
-        right_header = tk.Frame(header, bg=NAVY)
-        right_header.pack(side="right", fill="y", padx=(0, 22))
+        right_header = tk.Frame(header, bg=SIDEBAR)
+        right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text=f"VERSION {PRODUCT_VERSION}",
-            bg=NAVY,
-            fg="#9FC8EA",
+            text="VERSION 4.4",
+            bg=SIDEBAR,
+            fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
-        ).pack(anchor="e", pady=(20, 4))
+        ).pack(anchor="e", pady=(20, 5))
         tk.Button(
             right_header,
             text="About",
             command=self._show_about,
-            bg=NAVY_2,
+            bg=SIDEBAR_SECTION,
             fg=WHITE,
-            activebackground=ACCENT,
+            activebackground=SIDEBAR_HOVER,
             activeforeground=WHITE,
             relief="flat",
             bd=0,
-            padx=16,
+            padx=18,
             pady=7,
             cursor="hand2",
             font=("Segoe UI Semibold", 9),
         ).pack(anchor="e")
 
-        outer = ttk.Frame(self, padding=16)
-        outer.pack(fill="both", expand=True)
-        notebook = ttk.Notebook(outer)
+        shell = tk.Frame(self, bg=CONTENT_BG)
+        shell.pack(fill="both", expand=True)
+
+        sidebar = tk.Frame(shell, bg=SIDEBAR, width=230)
+        sidebar.pack(side="left", fill="y")
+        sidebar.pack_propagate(False)
+
+        content = ttk.Frame(shell, style="TFrame", padding=(18, 16, 18, 18))
+        content.pack(side="right", fill="both", expand=True)
+
+        notebook = ttk.Notebook(content, style="Main.TNotebook")
         notebook.pack(fill="both", expand=True)
+        self.main_notebook = notebook
+
         settings_tab = ttk.Frame(notebook, style="Card.TFrame")
         run = ttk.Frame(notebook, padding=14, style="Card.TFrame")
-        history_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
-        learning_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
-        knowledge_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
         deal_desk_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
         deliverability_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
         master_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
         hubspot_index_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
-        notebook.add(settings_tab, text="Search Profiles")
-        notebook.add(run, text="Run Dashboard")
-        notebook.add(deal_desk_tab, text="Deal Desk")
-        notebook.add(deliverability_tab, text="Deliverability Center")
-        notebook.add(master_tab, text="Master Prospect Database")
-        notebook.add(hubspot_index_tab, text="HubSpot CSV Index")
-        notebook.add(history_tab, text="Run History")
-        notebook.add(learning_tab, text="Qualification Learning")
-        notebook.add(knowledge_tab, text="Darwill Knowledge")
+        history_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
+        learning_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
+        knowledge_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
+
+        pages = [
+            (settings_tab, "Search Profiles", "DISCOVERY"),
+            (run, "Run Dashboard", "DISCOVERY"),
+            (deal_desk_tab, "Deal Desk", "DISCOVERY"),
+            (master_tab, "Master Database", "DATA"),
+            (hubspot_index_tab, "HubSpot CSV Index", "DATA"),
+            (history_tab, "Run History", "DATA"),
+            (deliverability_tab, "Deliverability", "INTELLIGENCE"),
+            (learning_tab, "Qualification Learning", "INTELLIGENCE"),
+            (knowledge_tab, "Darwill Knowledge", "INTELLIGENCE"),
+        ]
+        for frame, label, _section in pages:
+            notebook.add(frame, text=label)
+
+        nav_buttons: dict[int, tk.Button] = {}
+        active_index = tk.IntVar(value=0)
+
+        def select_page(index: int):
+            notebook.select(index)
+            active_index.set(index)
+            for button_index, button in nav_buttons.items():
+                if button_index == index:
+                    button.configure(
+                        bg=SIDEBAR_ACTIVE,
+                        fg=WHITE,
+                        activebackground=SIDEBAR_ACTIVE,
+                    )
+                else:
+                    button.configure(
+                        bg=SIDEBAR,
+                        fg="#D7E5F2",
+                        activebackground=SIDEBAR_HOVER,
+                    )
+
+        current_section = None
+        for index, (_frame, label, section) in enumerate(pages):
+            if section != current_section:
+                current_section = section
+                tk.Label(
+                    sidebar,
+                    text=section,
+                    bg=SIDEBAR_SECTION,
+                    fg="#7EA3C3",
+                    anchor="w",
+                    padx=18,
+                    pady=7,
+                    font=("Segoe UI Semibold", 8),
+                ).pack(fill="x", pady=(10 if index else 14, 4))
+            button = tk.Button(
+                sidebar,
+                text=label,
+                command=lambda i=index: select_page(i),
+                bg=SIDEBAR,
+                fg="#D7E5F2",
+                activebackground=SIDEBAR_HOVER,
+                activeforeground=WHITE,
+                relief="flat",
+                bd=0,
+                anchor="w",
+                padx=22,
+                pady=10,
+                cursor="hand2",
+                font=("Segoe UI Semibold", 10),
+            )
+            button.pack(fill="x", padx=10, pady=2)
+            nav_buttons[index] = button
+
+        footer = tk.Frame(sidebar, bg=SIDEBAR_SECTION)
+        footer.pack(side="bottom", fill="x", padx=12, pady=14)
+        tk.Label(
+            footer,
+            text="Darwill Compass 4.4",
+            bg=SIDEBAR_SECTION,
+            fg=WHITE,
+            anchor="w",
+            font=("Segoe UI Semibold", 9),
+        ).pack(fill="x", padx=12, pady=(10, 2))
+        tk.Label(
+            footer,
+            text="●  Proven engine preserved",
+            bg=SIDEBAR_SECTION,
+            fg="#6FE0A8",
+            anchor="w",
+            font=("Segoe UI", 8),
+        ).pack(fill="x", padx=12, pady=(0, 10))
+
+        select_page(0)
 
         settings_canvas = tk.Canvas(
             settings_tab,
-            bg=WHITE,
+            bg=CONTENT_BG,
             highlightthickness=0,
             borderwidth=0,
         )
@@ -5626,6 +5821,34 @@ class App(tk.Tk):
 
         settings_canvas.bind("<Enter>", _bind_settings_wheel)
         settings_canvas.bind("<Leave>", _unbind_settings_wheel)
+
+        profile_banner = tk.Frame(
+            settings,
+            bg=NAVY,
+            highlightthickness=0,
+        )
+        profile_banner.pack(fill="x", pady=(0, 12))
+        tk.Label(
+            profile_banner,
+            text="SEARCH PROFILES",
+            bg=NAVY,
+            fg="#78B7F4",
+            font=("Segoe UI Semibold", 9),
+        ).pack(anchor="w", padx=18, pady=(14, 2))
+        tk.Label(
+            profile_banner,
+            text="Configure discovery with the proven 3.6 engine.",
+            bg=NAVY,
+            fg=WHITE,
+            font=("Segoe UI Semibold", 15),
+        ).pack(anchor="w", padx=18)
+        tk.Label(
+            profile_banner,
+            text="Target companies → verify fit → recover contacts → review and approve",
+            bg=NAVY,
+            fg="#BCD3E7",
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", padx=18, pady=(3, 14))
 
         self.client_id = tk.StringVar()
         self.client_secret = tk.StringVar()
@@ -5694,10 +5917,46 @@ class App(tk.Tk):
         self.master_csv_company_count = tk.StringVar(value="0")
         self.master_csv_last_updated = tk.StringVar(value="Never")
 
-        profile_frame = ttk.LabelFrame(settings, text="Saved search profile", padding=12)
+        # ──────────────────────────────────────────────────────────────
+        # SEARCH PROFILES — modern presentation, original 3.6 variables
+        # and callbacks preserved.
+        # ──────────────────────────────────────────────────────────────
+        profile_frame = ttk.LabelFrame(
+            settings,
+            text="Discovery Profile",
+            padding=14,
+            style="ProfileCard.TLabelframe",
+        )
         profile_frame.pack(fill="x", pady=(0, 12))
-        ttk.Label(profile_frame, text="Profile", style="Card.TLabel").grid(
-            row=0, column=0, sticky="w", padx=(0, 12)
+
+        profile_intro = ttk.Frame(profile_frame, style="Card.TFrame")
+        profile_intro.grid(
+            row=0,
+            column=0,
+            columnspan=5,
+            sticky="ew",
+            pady=(0, 10),
+        )
+        ttk.Label(
+            profile_intro,
+            text="Choose a saved configuration or create a new targeting profile.",
+            style="Muted.TLabel",
+        ).pack(side="left")
+        ttk.Label(
+            profile_intro,
+            text="PROVEN 3.6 ENGINE",
+            style="PageEyebrow.TLabel",
+        ).pack(side="right")
+
+        ttk.Label(
+            profile_frame,
+            text="Profile",
+            style="Card.TLabel",
+        ).grid(
+            row=1,
+            column=0,
+            sticky="w",
+            padx=(0, 12),
         )
         self.profile_combo = ttk.Combobox(
             profile_frame,
@@ -5705,86 +5964,322 @@ class App(tk.Tk):
             state="readonly",
             width=32,
         )
-        self.profile_combo.grid(row=0, column=1, sticky="ew")
-        self.profile_combo.bind("<<ComboboxSelected>>", lambda _e: self._apply_profile())
+        self.profile_combo.grid(
+            row=1,
+            column=1,
+            sticky="ew",
+        )
+        self.profile_combo.bind(
+            "<<ComboboxSelected>>",
+            lambda _e: self._apply_profile(),
+        )
         ttk.Button(
-            profile_frame, text="Save Profile", style="Blue.TButton",
+            profile_frame,
+            text="Save Profile",
+            style="Blue.TButton",
             command=self._save_profile,
-        ).grid(row=0, column=2, padx=(10, 0))
+        ).grid(
+            row=1,
+            column=2,
+            padx=(10, 0),
+        )
         ttk.Button(
-            profile_frame, text="Save As…", style="Secondary.TButton",
+            profile_frame,
+            text="Save As…",
+            style="Secondary.TButton",
             command=self._save_profile_as,
-        ).grid(row=0, column=3, padx=(8, 0))
+        ).grid(
+            row=1,
+            column=3,
+            padx=(8, 0),
+        )
         ttk.Button(
-            profile_frame, text="Delete", style="Secondary.TButton",
+            profile_frame,
+            text="Delete",
+            style="Secondary.TButton",
             command=self._delete_profile,
-        ).grid(row=0, column=4, padx=(8, 0))
+        ).grid(
+            row=1,
+            column=4,
+            padx=(8, 0),
+        )
         profile_frame.columnconfigure(1, weight=1)
 
-        view_frame = ttk.Frame(settings, style="Card.TFrame")
-        view_frame.pack(fill="x", pady=(0, 8))
-        ttk.Checkbutton(
-            view_frame,
-            text="Show advanced technical settings",
-            variable=self.show_advanced,
-            command=self._update_advanced_visibility,
+        # Connection summary keeps credentials out of the main workflow.
+        connections = ttk.LabelFrame(
+            settings,
+            text="Connections",
+            padding=14,
+            style="ProfileCard.TLabelframe",
+        )
+        connections.pack(fill="x", pady=(0, 12))
+        connection_summary = ttk.Frame(
+            connections,
+            style="Card.TFrame",
+        )
+        connection_summary.pack(fill="x")
+
+        zoom_status = tk.Frame(
+            connection_summary,
+            bg="#F4F9FD",
+            highlightbackground="#CFE0ED",
+            highlightthickness=1,
+        )
+        zoom_status.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=(0, 8),
+        )
+        tk.Label(
+            zoom_status,
+            text="ZOOMINFO MCP",
+            bg="#F4F9FD",
+            fg=MUTED,
+            font=("Segoe UI Semibold", 8),
+        ).pack(anchor="w", padx=14, pady=(10, 2))
+        self.zoominfo_connection_status = tk.StringVar(
+            value=(
+                "●  Configured"
+                if self.client_id.get().strip()
+                and self.client_secret.get().strip()
+                else "○  Not configured"
+            )
+        )
+        tk.Label(
+            zoom_status,
+            textvariable=self.zoominfo_connection_status,
+            bg="#F4F9FD",
+            fg=SUCCESS,
+            font=("Segoe UI Semibold", 11),
+        ).pack(anchor="w", padx=14, pady=(0, 10))
+
+        tavily_status = tk.Frame(
+            connection_summary,
+            bg="#F4F9FD",
+            highlightbackground="#CFE0ED",
+            highlightthickness=1,
+        )
+        tavily_status.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=(0, 8),
+        )
+        tk.Label(
+            tavily_status,
+            text="TAVILY RESEARCH",
+            bg="#F4F9FD",
+            fg=MUTED,
+            font=("Segoe UI Semibold", 8),
+        ).pack(anchor="w", padx=14, pady=(10, 2))
+        self.tavily_connection_status = tk.StringVar(
+            value=(
+                "●  Configured"
+                if self.tavily_key.get().strip()
+                else "○  Not configured"
+            )
+        )
+        tk.Label(
+            tavily_status,
+            textvariable=self.tavily_connection_status,
+            bg="#F4F9FD",
+            fg=SUCCESS,
+            font=("Segoe UI Semibold", 11),
+        ).pack(anchor="w", padx=14, pady=(0, 10))
+
+        self.connections_expanded = tk.BooleanVar(value=False)
+        ttk.Button(
+            connection_summary,
+            text="Manage Connections",
+            style="Secondary.TButton",
+            command=self._toggle_connection_manager,
         ).pack(side="right")
 
-        credentials = ttk.LabelFrame(settings, text="Secure connections", padding=12)
-        credentials.pack(fill="x")
-        self._row(credentials, 0, "ZoomInfo MCP Client ID", self.client_id)
-        self._row(credentials, 1, "ZoomInfo MCP Client Secret", self.client_secret, show="•")
-        self._row(credentials, 2, "Tavily API Key", self.tavily_key, show="•")
-        button_col = ttk.Frame(credentials, style="Card.TFrame")
-        button_col.grid(row=0, column=2, rowspan=3, padx=(12, 0), sticky="ns")
-        ttk.Button(button_col, text="Save Securely", style="Blue.TButton", command=self._save_credentials).pack(fill="x", pady=(0, 6))
-        ttk.Button(button_col, text="Connect ZoomInfo", style="Secondary.TButton", command=self.connect_zoominfo).pack(fill="x")
-        ttk.Button(button_col, text="Clear ZoomInfo Authorization", style="Secondary.TButton", command=self.clear_zoominfo_authorization).pack(fill="x", pady=(6, 0))
+        self.credentials_panel = ttk.Frame(
+            connections,
+            style="Card.TFrame",
+        )
+        self.credentials_panel.pack(
+            fill="x",
+            pady=(12, 0),
+        )
+        self._row(
+            self.credentials_panel,
+            0,
+            "ZoomInfo MCP Client ID",
+            self.client_id,
+        )
+        self._row(
+            self.credentials_panel,
+            1,
+            "ZoomInfo MCP Client Secret",
+            self.client_secret,
+            show="•",
+        )
+        self._row(
+            self.credentials_panel,
+            2,
+            "Tavily API Key",
+            self.tavily_key,
+            show="•",
+        )
+        button_col = ttk.Frame(
+            self.credentials_panel,
+            style="Card.TFrame",
+        )
+        button_col.grid(
+            row=0,
+            column=2,
+            rowspan=3,
+            padx=(12, 0),
+            sticky="ns",
+        )
+        ttk.Button(
+            button_col,
+            text="Save Securely",
+            style="Blue.TButton",
+            command=self._save_credentials,
+        ).pack(fill="x", pady=(0, 6))
+        ttk.Button(
+            button_col,
+            text="Connect ZoomInfo",
+            style="Secondary.TButton",
+            command=self.connect_zoominfo,
+        ).pack(fill="x")
+        ttk.Button(
+            button_col,
+            text="Clear Authorization",
+            style="Secondary.TButton",
+            command=self.clear_zoominfo_authorization,
+        ).pack(fill="x", pady=(6, 0))
+        self.credentials_panel.pack_forget()
 
-        target = ttk.LabelFrame(settings, text="Target profile", padding=12)
-        target.pack(fill="x", pady=(12, 0))
-        for _column in range(3):
-            target.columnconfigure(_column, weight=1)
+        # Territory card.
+        territory_card = ttk.LabelFrame(
+            settings,
+            text="1. Territory",
+            padding=14,
+            style="ProfileCard.TLabelframe",
+        )
+        territory_card.pack(fill="x", pady=(0, 12))
 
-        area = ttk.LabelFrame(target, text="Search area", padding=10)
-        area.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 10))
+        territory_modes = ttk.Frame(
+            territory_card,
+            style="Card.TFrame",
+        )
+        territory_modes.pack(fill="x", pady=(0, 10))
         ttk.Radiobutton(
-            area, text="Search selected states", variable=self.search_mode,
-            value="states", command=self._update_search_mode,
+            territory_modes,
+            text="Selected states",
+            variable=self.search_mode,
+            value="states",
+            command=self._update_search_mode,
+        ).pack(side="left")
+        ttk.Radiobutton(
+            territory_modes,
+            text="ZIP-radius search",
+            variable=self.search_mode,
+            value="radius",
+            command=self._update_search_mode,
+        ).pack(side="left", padx=(20, 0))
+
+        self.state_chip_frame = tk.Frame(
+            territory_card,
+            bg=SURFACE,
+        )
+        self.state_chip_frame.pack(
+            fill="x",
+            pady=(0, 10),
+        )
+        self.state_chip_buttons = {}
+        self._render_state_chips()
+
+        territory_inputs = ttk.Frame(
+            territory_card,
+            style="Card.TFrame",
+        )
+        territory_inputs.pack(fill="x")
+        ttk.Label(
+            territory_inputs,
+            text="Selected state codes",
+            style="Muted.TLabel",
         ).grid(row=0, column=0, sticky="w")
-        ttk.Radiobutton(
-            area, text="Search within a ZIP radius", variable=self.search_mode,
-            value="radius", command=self._update_search_mode,
-        ).grid(row=0, column=1, sticky="w", padx=(24, 0))
-        ttk.Label(area, text="States", style="Card.TLabel").grid(
-            row=1, column=0, sticky="w", pady=(8, 0)
+        self.states_entry = ttk.Entry(
+            territory_inputs,
+            textvariable=self.states,
         )
-        self.states_entry = ttk.Entry(area, textvariable=self.states)
-        self.states_entry.grid(row=2, column=0, sticky="ew", padx=(0, 14))
-        ttk.Label(area, text="ZIP code", style="Card.TLabel").grid(
-            row=1, column=1, sticky="w", pady=(8, 0)
+        self.states_entry.grid(
+            row=1,
+            column=0,
+            sticky="ew",
+            padx=(0, 14),
         )
-        self.zip_entry = ttk.Entry(area, textvariable=self.territory_zip, width=14)
-        self.zip_entry.grid(row=2, column=1, sticky="w")
-        ttk.Label(area, text="Radius miles", style="Card.TLabel").grid(
-            row=1, column=2, sticky="w", pady=(8, 0), padx=(14, 0)
+        self.states_entry.bind(
+            "<FocusOut>",
+            lambda _e: self._sync_state_chips(),
+        )
+        self.states_entry.bind(
+            "<Return>",
+            lambda _e: self._sync_state_chips(),
+        )
+        ttk.Label(
+            territory_inputs,
+            text="ZIP code",
+            style="Muted.TLabel",
+        ).grid(row=0, column=1, sticky="w")
+        self.zip_entry = ttk.Entry(
+            territory_inputs,
+            textvariable=self.territory_zip,
+            width=14,
+        )
+        self.zip_entry.grid(
+            row=1,
+            column=1,
+            sticky="w",
+        )
+        ttk.Label(
+            territory_inputs,
+            text="Radius",
+            style="Muted.TLabel",
+        ).grid(
+            row=0,
+            column=2,
+            sticky="w",
+            padx=(14, 0),
         )
         self.radius_combo = ttk.Combobox(
-            area, textvariable=self.territory_radius,
+            territory_inputs,
+            textvariable=self.territory_radius,
             values=["10", "25", "50", "100", "250"],
-            state="readonly", width=10,
+            state="readonly",
+            width=10,
         )
-        self.radius_combo.grid(row=2, column=2, sticky="w", padx=(14, 0))
-        area.columnconfigure(0, weight=1)
+        self.radius_combo.grid(
+            row=1,
+            column=2,
+            sticky="w",
+            padx=(14, 0),
+        )
+        territory_inputs.columnconfigure(0, weight=1)
 
-        trades_frame = ttk.LabelFrame(target, text="Trades", padding=10)
-        trades_frame.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(0, 10))
-        trade_header = ttk.Frame(trades_frame, style="Card.TFrame")
-        trade_header.grid(row=0, column=0, columnspan=4, sticky="ew", pady=(0, 6))
+        # Trades card with clickable chips backed by the original BooleanVars.
+        trades_frame = ttk.LabelFrame(
+            settings,
+            text="2. Trades",
+            padding=14,
+            style="ProfileCard.TLabelframe",
+        )
+        trades_frame.pack(fill="x", pady=(0, 12))
+        trade_header = ttk.Frame(
+            trades_frame,
+            style="Card.TFrame",
+        )
+        trade_header.pack(fill="x", pady=(0, 10))
         ttk.Label(
             trade_header,
-            text="Choose one or more trade presets",
-            style="Card.TLabel",
+            text="Select the residential home-service categories to include.",
+            style="Muted.TLabel",
         ).pack(side="left")
         ttk.Button(
             trade_header,
@@ -5793,57 +6288,221 @@ class App(tk.Tk):
             command=self._open_trade_manager,
         ).pack(side="right")
 
-        self.trade_checkbox_frame = ttk.Frame(trades_frame, style="Card.TFrame")
-        self.trade_checkbox_frame.grid(
-            row=1, column=0, columnspan=4, sticky="ew"
+        self.trade_checkbox_frame = tk.Frame(
+            trades_frame,
+            bg=SURFACE,
         )
+        self.trade_checkbox_frame.pack(fill="x")
         self._render_trade_checkboxes()
 
         self.custom_keywords_label = ttk.Label(
-            trades_frame, text="Custom trade keywords (optional)",
+            trades_frame,
+            text="Custom trade keywords",
             style="Card.TLabel",
         )
-        self.custom_keywords_label.grid(row=2, column=0, sticky="w", pady=(10, 0))
+        self.custom_keywords_label.pack(
+            anchor="w",
+            pady=(12, 4),
+        )
         self.custom_keywords_entry = ttk.Entry(
-            trades_frame, textvariable=self.custom_trade_keywords,
+            trades_frame,
+            textvariable=self.custom_trade_keywords,
         )
-        self.custom_keywords_entry.grid(
-            row=3, column=0, columnspan=3, sticky="ew", padx=(0, 10)
-        )
+        self.custom_keywords_entry.pack(fill="x")
         self.custom_naics_label = ttk.Label(
-            trades_frame, text="Custom NAICS (optional)",
+            trades_frame,
+            text="Custom NAICS",
             style="Card.TLabel",
         )
-        self.custom_naics_label.grid(row=2, column=3, sticky="w", pady=(10, 0))
-        self.custom_naics_entry = ttk.Entry(
-            trades_frame, textvariable=self.naics_codes,
+        self.custom_naics_label.pack(
+            anchor="w",
+            pady=(10, 4),
         )
-        self.custom_naics_entry.grid(row=3, column=3, sticky="ew")
+        self.custom_naics_entry = ttk.Entry(
+            trades_frame,
+            textvariable=self.naics_codes,
+        )
+        self.custom_naics_entry.pack(fill="x")
         self.trade_preview = tk.StringVar(value="")
         ttk.Label(
-            trades_frame, textvariable=self.trade_preview,
-            style="Card.TLabel", foreground=MUTED, wraplength=850,
-        ).grid(row=4, column=0, columnspan=4, sticky="w", pady=(8, 0))
-        for col in range(4):
-            trades_frame.columnconfigure(col, weight=1)
+            trades_frame,
+            textvariable=self.trade_preview,
+            style="Muted.TLabel",
+            wraplength=1050,
+        ).pack(anchor="w", pady=(10, 0))
 
-        criteria = ttk.LabelFrame(target, text="Search volume and qualification", padding=10)
-        criteria.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(0, 10))
-        self._row(criteria, 0, "Qualified companies requested", self.target_count)
-        self._row(criteria, 1, "Maximum ZoomInfo candidates", self.candidate_limit)
-        self._row(criteria, 2, "Contacts per company", self.contacts_per_company)
-        self._row(criteria, 3, "Minimum fit score", self.minimum_fit_score)
+        # Company size + run goal side-by-side.
+        sizing_row = ttk.Frame(
+            settings,
+            style="Card.TFrame",
+        )
+        sizing_row.pack(fill="x", pady=(0, 12))
 
-        company_size = ttk.LabelFrame(target, text="Company size", padding=10)
-        company_size.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(0, 10))
-        self._formatted_number_row(company_size, 0, "Minimum revenue", self.minimum_revenue)
-        self._formatted_number_row(company_size, 1, "Maximum revenue", self.maximum_revenue)
-        self._row(company_size, 2, "Minimum employees", self.employee_min)
-        self._row(company_size, 3, "Maximum employees", self.employee_max)
+        company_size = ttk.LabelFrame(
+            sizing_row,
+            text="3. Company Size",
+            padding=14,
+            style="ProfileCard.TLabelframe",
+        )
+        company_size.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(0, 6),
+        )
+        size_grid = ttk.Frame(
+            company_size,
+            style="Card.TFrame",
+        )
+        size_grid.pack(fill="x")
 
-        workflow = ttk.LabelFrame(target, text="Workflow and research", padding=10)
-        workflow.grid(row=4, column=0, columnspan=3, sticky="ew")
-        self._row(workflow, 0, "Parallel research workers", self.research_workers)
+        size_fields = [
+            ("Minimum revenue", self.minimum_revenue, "$"),
+            ("Maximum revenue", self.maximum_revenue, "$"),
+            ("Minimum employees", self.employee_min, ""),
+            ("Maximum employees", self.employee_max, ""),
+        ]
+        for index, (label, variable, prefix) in enumerate(size_fields):
+            row = index // 2
+            col = index % 2
+            field = ttk.Frame(size_grid, style="Card.TFrame")
+            field.grid(
+                row=row,
+                column=col,
+                sticky="ew",
+                padx=(0 if col == 0 else 8, 8 if col == 0 else 0),
+                pady=(0, 10 if row == 0 else 0),
+            )
+            ttk.Label(
+                field,
+                text=label,
+                style="Muted.TLabel",
+            ).pack(anchor="w", pady=(0, 4))
+            entry_wrap = ttk.Frame(field, style="Card.TFrame")
+            entry_wrap.pack(fill="x")
+            if prefix:
+                ttk.Label(
+                    entry_wrap,
+                    text=prefix,
+                    style="SectionTitle.TLabel",
+                ).pack(side="left", padx=(0, 4))
+            entry = ttk.Entry(
+                entry_wrap,
+                textvariable=variable,
+                style="MetricEntry.TEntry",
+            )
+            entry.pack(side="left", fill="x", expand=True)
+            if (
+                variable is self.minimum_revenue
+                or variable is self.maximum_revenue
+            ):
+                entry.bind(
+                    "<FocusOut>",
+                    lambda _e, v=variable: self._normalize_profile_number(v),
+                )
+                entry.bind(
+                    "<Return>",
+                    lambda _e, v=variable: self._normalize_profile_number(v),
+                )
+        size_grid.columnconfigure(0, weight=1)
+        size_grid.columnconfigure(1, weight=1)
+
+        goal_card = ttk.LabelFrame(
+            sizing_row,
+            text="4. Discovery Goal",
+            padding=14,
+            style="ProfileCard.TLabelframe",
+        )
+        goal_card.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(6, 0),
+        )
+        goal_grid = ttk.Frame(
+            goal_card,
+            style="Card.TFrame",
+        )
+        goal_grid.pack(fill="x")
+        goal_fields = [
+            ("Qualified companies", self.target_count),
+            ("Candidate pool", self.candidate_limit),
+            ("Contacts per company", self.contacts_per_company),
+            ("Minimum fit score", self.minimum_fit_score),
+        ]
+        for index, (label, variable) in enumerate(goal_fields):
+            row = index // 2
+            col = index % 2
+            field = ttk.Frame(goal_grid, style="Card.TFrame")
+            field.grid(
+                row=row,
+                column=col,
+                sticky="ew",
+                padx=(0 if col == 0 else 8, 8 if col == 0 else 0),
+                pady=(0, 10 if row == 0 else 0),
+            )
+            ttk.Label(
+                field,
+                text=label,
+                style="Muted.TLabel",
+            ).pack(anchor="w", pady=(0, 4))
+            ttk.Entry(
+                field,
+                textvariable=variable,
+                style="MetricEntry.TEntry",
+            ).pack(fill="x")
+        goal_grid.columnconfigure(0, weight=1)
+        goal_grid.columnconfigure(1, weight=1)
+
+        # Advanced workflow settings remain available but no longer dominate.
+        advanced_card = ttk.LabelFrame(
+            settings,
+            text="Advanced Workflow",
+            padding=14,
+            style="ProfileCard.TLabelframe",
+        )
+        advanced_card.pack(fill="x", pady=(0, 12))
+        advanced_header = ttk.Frame(
+            advanced_card,
+            style="Card.TFrame",
+        )
+        advanced_header.pack(fill="x")
+        ttk.Label(
+            advanced_header,
+            text=(
+                "Deduplication, contact recovery, credit controls, "
+                "master-database policy, and output settings."
+            ),
+            style="Muted.TLabel",
+        ).pack(side="left")
+        ttk.Checkbutton(
+            advanced_header,
+            text="Show advanced settings",
+            variable=self.show_advanced,
+            command=self._update_advanced_visibility,
+        ).pack(side="right")
+
+        self.advanced_profile_panel = ttk.Frame(
+            advanced_card,
+            style="Card.TFrame",
+        )
+        self.advanced_profile_panel.pack(
+            fill="x",
+            pady=(12, 0),
+        )
+
+        workflow = ttk.LabelFrame(
+            self.advanced_profile_panel,
+            text="Workflow and Research",
+            padding=10,
+        )
+        workflow.pack(fill="x", pady=(0, 10))
+        self._row(
+            workflow,
+            0,
+            "Parallel research workers",
+            self.research_workers,
+        )
         ttk.Checkbutton(
             workflow,
             text="Use ZoomInfo CRM/HubSpot flags as a secondary exclusion",
@@ -5875,7 +6534,9 @@ class App(tk.Tk):
             variable=self.deep_contact_recovery,
         ).grid(row=6, column=1, sticky="w", pady=4)
         self._row(
-            workflow, 7, "Contacts per company for deep recovery",
+            workflow,
+            7,
+            "Contacts per company for deep recovery",
             self.deep_recovery_contact_limit,
         )
         ttk.Checkbutton(
@@ -5909,21 +6570,20 @@ class App(tk.Tk):
         ttk.Label(
             credit_options,
             text=(
-                "These are off by default because they may consume ZoomInfo "
-                "bulk-data or AI credits."
+                "These are off by default because they may consume "
+                "ZoomInfo bulk-data or AI credits."
             ),
             style="Card.TLabel",
             foreground=WARNING,
-            wraplength=760,
+            wraplength=900,
         ).pack(anchor="w", pady=(4, 0))
 
-        self._refresh_trade_preview()
-        self._update_search_mode()
-
         master_policy = ttk.LabelFrame(
-            settings, text="Master Prospect Database Policy", padding=12
+            self.advanced_profile_panel,
+            text="Master Prospect Database Policy",
+            padding=10,
         )
-        master_policy.pack(fill="x", pady=(12, 0))
+        master_policy.pack(fill="x", pady=(0, 10))
         ttk.Checkbutton(
             master_policy,
             text="Use the master database to prevent repeat qualification",
@@ -5945,22 +6605,35 @@ class App(tk.Tk):
             master_policy,
             text=(
                 "Use 0 for qualified companies to skip them permanently. "
-                "Approved, HubSpot-synced, sequenced, meeting, customer, and "
-                "lost records are always skipped unless their lifecycle status "
-                "is changed manually in the Master Prospect Database."
+                "Approved, HubSpot-synced, sequenced, meeting, customer, "
+                "and lost records remain protected."
             ),
             style="Muted.TLabel",
             wraplength=920,
         ).grid(
-            row=3, column=0, columnspan=3,
-            sticky="w", pady=(8, 0)
+            row=3,
+            column=0,
+            columnspan=3,
+            sticky="w",
+            pady=(8, 0),
         )
 
-        destination = ttk.LabelFrame(settings, text="Output and application", padding=12)
-        destination.pack(fill="x", pady=(12, 0))
-        self._row(destination, 0, "Output folder", self.output_folder)
+        destination = ttk.LabelFrame(
+            self.advanced_profile_panel,
+            text="Output and Application",
+            padding=10,
+        )
+        destination.pack(fill="x")
+        self._row(
+            destination,
+            0,
+            "Output folder",
+            self.output_folder,
+        )
         ttk.Button(
-            destination, text="Browse", style="Secondary.TButton",
+            destination,
+            text="Browse",
+            style="Secondary.TButton",
             command=self._browse_output_folder,
         ).grid(row=0, column=2, padx=(8, 0))
         ttk.Checkbutton(
@@ -5968,26 +6641,128 @@ class App(tk.Tk):
             text="Resume the previous interrupted run when a checkpoint exists",
             variable=self.resume_checkpoint,
         ).grid(row=1, column=1, sticky="w", pady=4)
-        app_buttons = ttk.Frame(destination, style="Card.TFrame")
-        app_buttons.grid(row=2, column=1, sticky="w", pady=(8, 0))
+        app_buttons = ttk.Frame(
+            destination,
+            style="Card.TFrame",
+        )
+        app_buttons.grid(
+            row=2,
+            column=1,
+            sticky="w",
+            pady=(8, 0),
+        )
         ttk.Button(
-            app_buttons, text="Create Desktop Shortcut",
-            style="Secondary.TButton", command=self._create_shortcut,
+            app_buttons,
+            text="Create Desktop Shortcut",
+            style="Secondary.TButton",
+            command=self._create_shortcut,
         ).pack(side="left")
         ttk.Button(
-            app_buttons, text="Check for Updates",
-            style="Secondary.TButton", command=self._check_updates,
+            app_buttons,
+            text="Check for Updates",
+            style="Secondary.TButton",
+            command=self._check_updates,
         ).pack(side="left", padx=(8, 0))
         ttk.Button(
-            app_buttons, text="Open Output Folder",
-            style="Secondary.TButton", command=self._open_output_folder,
+            app_buttons,
+            text="Open Output Folder",
+            style="Secondary.TButton",
+            command=self._open_output_folder,
         ).pack(side="left", padx=(8, 0))
 
-        ttk.Button(settings, text="Save Settings", style="Blue.TButton", command=self._save_settings).pack(anchor="w", pady=(14, 0))
-        ttk.Button(settings, text="Reset Local History", style="Secondary.TButton", command=self._reset_history).pack(anchor="w", pady=(8, 0))
+        # Keep advanced content collapsed by default.
+        self.advanced_profile_panel.pack_forget()
+        self._update_advanced_visibility()
 
-        dashboard = ttk.Frame(run, style="Card.TFrame")
-        dashboard.pack(fill="x", pady=(0, 12))
+        # Primary action is intentionally unmistakable.
+        launch_card = tk.Frame(
+            settings,
+            bg=NAVY,
+            highlightthickness=0,
+        )
+        launch_card.pack(fill="x", pady=(0, 6))
+        launch_copy = tk.Frame(
+            launch_card,
+            bg=NAVY,
+        )
+        launch_copy.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=18,
+            pady=14,
+        )
+        tk.Label(
+            launch_copy,
+            text="READY TO BUILD THE NEXT QUALIFIED LIST?",
+            bg=NAVY,
+            fg="#78B7F4",
+            font=("Segoe UI Semibold", 8),
+        ).pack(anchor="w")
+        tk.Label(
+            launch_copy,
+            text="Run the proven discovery workflow with this profile.",
+            bg=NAVY,
+            fg=WHITE,
+            font=("Segoe UI Semibold", 14),
+        ).pack(anchor="w", pady=(2, 0))
+        launch_buttons = tk.Frame(
+            launch_card,
+            bg=NAVY,
+        )
+        launch_buttons.pack(
+            side="right",
+            padx=18,
+            pady=14,
+        )
+        ttk.Button(
+            launch_buttons,
+            text="Save Settings",
+            style="Secondary.TButton",
+            command=self._save_settings,
+        ).pack(side="left", padx=(0, 8))
+        ttk.Button(
+            launch_buttons,
+            text="START DISCOVERY  →",
+            style="Hero.TButton",
+            command=self.start,
+        ).pack(side="left")
+
+        self._refresh_trade_preview()
+        self._sync_state_chips()
+        self._update_search_mode()
+
+        dashboard_header = tk.Frame(
+            run, bg=NAVY, padx=20, pady=16,
+            highlightthickness=0,
+        )
+        dashboard_header.pack(fill="x", pady=(0, 12))
+        tk.Label(
+            dashboard_header,
+            text="LIVE PROSPECT INTELLIGENCE",
+            bg=NAVY,
+            fg="#75B6F5",
+            font=("Segoe UI Semibold", 8),
+        ).pack(anchor="w")
+        tk.Label(
+            dashboard_header,
+            text="Run Dashboard",
+            bg=NAVY,
+            fg=WHITE,
+            font=("Segoe UI Semibold", 20),
+        ).pack(anchor="w", pady=(2, 2))
+        tk.Label(
+            dashboard_header,
+            text=(
+                "See exactly where every candidate is in the proven workflow—"
+                "from ZoomInfo discovery through research, qualification, "
+                "contact recovery, and review."
+            ),
+            bg=NAVY,
+            fg="#CFE3F6",
+            font=("Segoe UI", 10),
+        ).pack(anchor="w")
+
         self.metric_vars = {
             "qualified": tk.StringVar(value="0"),
             "contacts": tk.StringVar(value="0"),
@@ -5995,43 +6770,347 @@ class App(tk.Tk):
             "elapsed": tk.StringVar(value="00:00"),
             "eta": tk.StringVar(value="—"),
         }
-        for col, (label, key) in enumerate([
-            ("Qualified", "qualified"),
-            ("Contacts", "contacts"),
-            ("Reviewed", "reviewed"),
-            ("Elapsed", "elapsed"),
-            ("Estimated remaining", "eta"),
-        ]):
-            card = tk.Frame(dashboard, bg=SURFACE, bd=0, padx=16, pady=12, highlightthickness=1, highlightbackground=BORDER)
-            card.grid(row=0, column=col, sticky="nsew", padx=4)
+        self.funnel_vars = {
+            "zoominfo": tk.StringVar(value="0"),
+            "reviewed": tk.StringVar(value="0"),
+            "researched": tk.StringVar(value="0"),
+            "rejected": tk.StringVar(value="0"),
+            "qualified": tk.StringVar(value="0"),
+            "contacts": tk.StringVar(value="0"),
+        }
+        self.funnel_counts = {
+            "zoominfo": 0,
+            "reviewed": 0,
+            "researched": 0,
+            "rejected": 0,
+            "qualified": 0,
+            "contacts": 0,
+        }
+        self.preview_vars = {
+            "company": tk.StringVar(value="Waiting for discovery to begin"),
+            "phase": tk.StringVar(value="READY"),
+            "location": tk.StringVar(value="—"),
+            "size": tk.StringVar(value="—"),
+            "score": tk.StringVar(value="—"),
+            "residential": tk.StringVar(value="—"),
+            "growth": tk.StringVar(value="—"),
+            "contact": tk.StringVar(value="No contact ranked yet"),
+            "detail": tk.StringVar(
+                value="Start Discovery to see live company intelligence."
+            ),
+        }
+
+        # Primary KPIs.
+        dashboard = tk.Frame(run, bg=SURFACE)
+        dashboard.pack(fill="x", pady=(0, 10))
+        metric_specs = [
+            ("Qualified", "qualified", "Ready for review"),
+            ("Contacts", "contacts", "Ranked decision-makers"),
+            ("Reviewed", "reviewed", "Unique candidates evaluated"),
+            ("Elapsed", "elapsed", "Current run time"),
+            ("Remaining", "eta", "Estimated from live pace"),
+        ]
+        for col, (label, key, helper) in enumerate(metric_specs):
+            card = tk.Frame(
+                dashboard,
+                bg=SURFACE,
+                padx=16,
+                pady=13,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+            )
+            card.grid(
+                row=0,
+                column=col,
+                sticky="nsew",
+                padx=(0 if col == 0 else 5, 0),
+            )
+            tk.Frame(card, bg=ACCENT, height=4).pack(
+                fill="x", pady=(0, 9)
+            )
             tk.Label(
-                card, textvariable=self.metric_vars[key],
-                bg=SURFACE, fg=NAVY, font=("Segoe UI Semibold", 20),
-            ).pack()
+                card,
+                textvariable=self.metric_vars[key],
+                bg=SURFACE,
+                fg=NAVY,
+                font=("Segoe UI Semibold", 23),
+            ).pack(anchor="w")
             tk.Label(
-                card, text=label,
-                bg=SURFACE, fg=MUTED, font=("Segoe UI Semibold", 8),
-            ).pack()
+                card,
+                text=label,
+                bg=SURFACE,
+                fg=TEXT,
+                font=("Segoe UI Semibold", 9),
+            ).pack(anchor="w", pady=(2, 0))
+            tk.Label(
+                card,
+                text=helper,
+                bg=SURFACE,
+                fg=MUTED,
+                font=("Segoe UI", 8),
+            ).pack(anchor="w", pady=(2, 0))
             dashboard.columnconfigure(col, weight=1)
 
-        controls = ttk.Frame(run, style="Card.TFrame")
+        controls_card = tk.Frame(
+            run,
+            bg=SURFACE,
+            padx=14,
+            pady=11,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+        )
+        controls_card.pack(fill="x", pady=(0, 10))
+        controls = ttk.Frame(controls_card, style="Card.TFrame")
         controls.pack(fill="x")
-        self.run_button = ttk.Button(controls, text="Find Qualified Prospects", style="Blue.TButton", command=self.start)
+        self.run_button = ttk.Button(
+            controls,
+            text="Start Discovery",
+            style="Primary.TButton",
+            command=self.start,
+        )
         self.run_button.pack(side="left")
-        self.stop_button = ttk.Button(controls, text="Stop", style="Secondary.TButton", command=self.stop, state="disabled")
+        self.stop_button = ttk.Button(
+            controls,
+            text="Stop",
+            style="Secondary.TButton",
+            command=self.stop,
+            state="disabled",
+        )
         self.stop_button.pack(side="left", padx=(8, 0))
         self.progress = ttk.Progressbar(controls, mode="indeterminate")
-        self.progress.pack(side="left", fill="x", expand=True, padx=14)
-
+        self.progress.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=14,
+        )
         self.status = tk.StringVar(value="Ready")
-        ttk.Label(run, textvariable=self.status, style="Card.TLabel", font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(12, 6))
+        tk.Label(
+            controls_card,
+            text="●",
+            bg=SURFACE,
+            fg="#19A66A",
+            font=("Segoe UI", 11),
+        ).pack(side="left", pady=(8, 0))
+        tk.Label(
+            controls_card,
+            textvariable=self.status,
+            bg=SURFACE,
+            fg=NAVY,
+            font=("Segoe UI Semibold", 10),
+        ).pack(side="left", padx=(7, 0), pady=(8, 0))
 
-        log_frame = ttk.LabelFrame(run, text="Live activity", padding=8)
+        # Funnel + current-company intelligence.
+        intelligence_row = tk.Frame(run, bg=SURFACE)
+        intelligence_row.pack(fill="x", pady=(0, 10))
+
+        funnel_card = tk.Frame(
+            intelligence_row,
+            bg=SURFACE,
+            padx=14,
+            pady=12,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+        )
+        funnel_card.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(0, 5),
+        )
+        tk.Label(
+            funnel_card,
+            text="LIVE DISCOVERY FUNNEL",
+            bg=SURFACE,
+            fg=MUTED,
+            font=("Segoe UI Semibold", 8),
+        ).pack(anchor="w")
+        tk.Label(
+            funnel_card,
+            text="How the candidate pool is moving through Compass",
+            bg=SURFACE,
+            fg=NAVY,
+            font=("Segoe UI Semibold", 12),
+        ).pack(anchor="w", pady=(2, 10))
+
+        funnel_stages = [
+            ("ZoomInfo found", "zoominfo"),
+            ("Reviewed", "reviewed"),
+            ("Tavily researched", "researched"),
+            ("Rejected / filtered", "rejected"),
+            ("Qualified", "qualified"),
+            ("Contacts ranked", "contacts"),
+        ]
+        self.funnel_stage_frames = {}
+        for index, (label, key) in enumerate(funnel_stages):
+            stage = tk.Frame(
+                funnel_card,
+                bg="#F4F8FC",
+                padx=10,
+                pady=7,
+                highlightthickness=1,
+                highlightbackground="#D8E4EF",
+            )
+            stage.pack(fill="x", pady=(0, 5))
+            tk.Label(
+                stage,
+                text=str(index + 1),
+                bg=ACCENT if key in {"qualified", "contacts"} else "#DDEAF5",
+                fg=WHITE if key in {"qualified", "contacts"} else NAVY,
+                width=3,
+                font=("Segoe UI Semibold", 9),
+            ).pack(side="left")
+            tk.Label(
+                stage,
+                text=label,
+                bg="#F4F8FC",
+                fg=TEXT,
+                font=("Segoe UI Semibold", 9),
+            ).pack(side="left", padx=(9, 0))
+            tk.Label(
+                stage,
+                textvariable=self.funnel_vars[key],
+                bg="#F4F8FC",
+                fg=ACCENT if key in {"qualified", "contacts"} else NAVY,
+                font=("Segoe UI Semibold", 13),
+            ).pack(side="right")
+            self.funnel_stage_frames[key] = stage
+
+        preview_card = tk.Frame(
+            intelligence_row,
+            bg=NAVY,
+            padx=16,
+            pady=13,
+            highlightthickness=0,
+        )
+        preview_card.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(5, 0),
+        )
+        top_line = tk.Frame(preview_card, bg=NAVY)
+        top_line.pack(fill="x")
+        tk.Label(
+            top_line,
+            text="CURRENT PROSPECT",
+            bg=NAVY,
+            fg="#75B6F5",
+            font=("Segoe UI Semibold", 8),
+        ).pack(side="left")
+        tk.Label(
+            top_line,
+            textvariable=self.preview_vars["phase"],
+            bg="#0F568F",
+            fg=WHITE,
+            padx=9,
+            pady=3,
+            font=("Segoe UI Semibold", 8),
+        ).pack(side="right")
+        tk.Label(
+            preview_card,
+            textvariable=self.preview_vars["company"],
+            bg=NAVY,
+            fg=WHITE,
+            anchor="w",
+            font=("Segoe UI Semibold", 16),
+        ).pack(fill="x", pady=(7, 2))
+        tk.Label(
+            preview_card,
+            textvariable=self.preview_vars["detail"],
+            bg=NAVY,
+            fg="#CFE3F6",
+            anchor="w",
+            justify="left",
+            wraplength=620,
+            font=("Segoe UI", 9),
+        ).pack(fill="x", pady=(0, 11))
+
+        preview_grid = tk.Frame(preview_card, bg=NAVY)
+        preview_grid.pack(fill="x")
+        preview_specs = [
+            ("LOCATION", "location"),
+            ("COMPANY SIZE", "size"),
+            ("FIT SCORE", "score"),
+            ("RESIDENTIAL", "residential"),
+            ("GROWTH", "growth"),
+        ]
+        for col, (label, key) in enumerate(preview_specs):
+            box = tk.Frame(
+                preview_grid,
+                bg="#0D3558",
+                padx=9,
+                pady=8,
+            )
+            box.grid(
+                row=0,
+                column=col,
+                sticky="nsew",
+                padx=(0 if col == 0 else 4, 0),
+            )
+            tk.Label(
+                box,
+                text=label,
+                bg="#0D3558",
+                fg="#7FAACD",
+                font=("Segoe UI Semibold", 7),
+            ).pack(anchor="w")
+            tk.Label(
+                box,
+                textvariable=self.preview_vars[key],
+                bg="#0D3558",
+                fg=WHITE,
+                font=("Segoe UI Semibold", 10),
+                wraplength=120,
+                justify="left",
+            ).pack(anchor="w", pady=(3, 0))
+            preview_grid.columnconfigure(col, weight=1)
+
+        contact_box = tk.Frame(
+            preview_card,
+            bg="#0D3558",
+            padx=10,
+            pady=8,
+        )
+        contact_box.pack(fill="x", pady=(9, 0))
+        tk.Label(
+            contact_box,
+            text="TOP CONTACT / WHY",
+            bg="#0D3558",
+            fg="#7FAACD",
+            font=("Segoe UI Semibold", 7),
+        ).pack(anchor="w")
+        tk.Label(
+            contact_box,
+            textvariable=self.preview_vars["contact"],
+            bg="#0D3558",
+            fg=WHITE,
+            anchor="w",
+            justify="left",
+            wraplength=650,
+            font=("Segoe UI", 9),
+        ).pack(fill="x", pady=(3, 0))
+
+        log_frame = ttk.LabelFrame(
+            run,
+            text="Live Activity",
+            padding=10,
+        )
         log_frame.pack(fill="both", expand=True)
         self.log = tk.Text(
-            log_frame, wrap="word", state="disabled", font=("Consolas", 10),
-            bg=BLUE_PALE, fg=TEXT, insertbackground=BLUE_DARK,
-            relief="flat", highlightthickness=1, highlightbackground="#B9D3EA"
+            log_frame,
+            wrap="word",
+            state="disabled",
+            font=("Consolas", 9),
+            bg="#071B2E",
+            fg="#DCEBFA",
+            insertbackground=WHITE,
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground="#173E61",
+            padx=14,
+            pady=12,
+            height=12,
         )
         scroll = ttk.Scrollbar(log_frame, command=self.log.yview)
         self.log.configure(yscrollcommand=scroll.set)
@@ -6039,26 +7118,35 @@ class App(tk.Tk):
         scroll.pack(side="right", fill="y")
 
         # Deal Desk: human approval gate before HubSpot or sequence enrollment.
-        desk_header = ttk.Frame(deal_desk_tab, style="Card.TFrame")
-        desk_header.pack(fill="x", pady=(0, 10))
-        ttk.Label(
-            desk_header,
-            text="Review Queue",
-            style="SectionTitle.TLabel",
-        ).pack(side="left")
-        ttk.Label(
-            desk_header,
-            text=(
-                "Nothing is synced or enrolled until you explicitly approve it."
-            ),
-            style="Muted.TLabel",
-        ).pack(side="left", padx=(12, 0))
+        desk_header = tk.Frame(
+            deal_desk_tab, bg=NAVY, padx=20, pady=15
+        )
+        desk_header.pack(fill="x", pady=(0, 12))
+        title_area = tk.Frame(desk_header, bg=NAVY)
+        title_area.pack(side="left", fill="x", expand=True)
+        tk.Label(
+            title_area, text="REVIEW & APPROVAL",
+            bg=NAVY, fg="#75B6F5",
+            font=("Segoe UI Semibold", 8),
+        ).pack(anchor="w")
+        tk.Label(
+            title_area, text="Deal Desk",
+            bg=NAVY, fg=WHITE,
+            font=("Segoe UI Semibold", 19),
+        ).pack(anchor="w", pady=(2, 1))
+        tk.Label(
+            title_area,
+            text="Review research, contacts, outreach, and inbox readiness before any HubSpot action.",
+            bg=NAVY, fg="#CFE3F6",
+            font=("Segoe UI", 9),
+        ).pack(anchor="w")
 
-        filter_wrap = ttk.Frame(desk_header, style="Card.TFrame")
-        filter_wrap.pack(side="right")
-        ttk.Label(
-            filter_wrap, text="Show", style="Card.TLabel"
-        ).pack(side="left", padx=(0, 6))
+        filter_wrap = tk.Frame(desk_header, bg=NAVY)
+        filter_wrap.pack(side="right", padx=(18, 0))
+        tk.Label(
+            filter_wrap, text="SHOW", bg=NAVY, fg="#9FC3E2",
+            font=("Segoe UI Semibold", 8),
+        ).pack(anchor="e", pady=(0, 4))
         desk_filter = ttk.Combobox(
             filter_wrap,
             textvariable=self.deal_desk_filter,
@@ -6074,6 +7162,59 @@ class App(tk.Tk):
             "<<ComboboxSelected>>",
             lambda _event: self._refresh_deal_desk(),
         )
+
+        self.deal_kpi_vars = {
+            "pending": tk.StringVar(value="0"),
+            "verification": tk.StringVar(value="0"),
+            "approved": tk.StringVar(value="0"),
+            "synced": tk.StringVar(value="0"),
+            "enrolled": tk.StringVar(value="0"),
+        }
+
+        desk_kpis = tk.Frame(
+            deal_desk_tab,
+            bg=SURFACE,
+        )
+        desk_kpis.pack(fill="x", pady=(0, 10))
+        desk_kpi_specs = [
+            ("Pending Review", "pending", "#EAF3FB", NAVY),
+            ("Needs Verification", "verification", "#FFF4DB", WARNING),
+            ("Approved", "approved", "#E9F7F0", SUCCESS),
+            ("Synced", "synced", "#EAF3FB", ACCENT),
+            ("Enrolled", "enrolled", "#F1ECFB", "#6545A4"),
+        ]
+        for column, (label, key, background, foreground) in enumerate(
+            desk_kpi_specs
+        ):
+            card = tk.Frame(
+                desk_kpis,
+                bg=background,
+                padx=13,
+                pady=10,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+            )
+            card.grid(
+                row=0,
+                column=column,
+                sticky="nsew",
+                padx=(0 if column == 0 else 5, 0),
+            )
+            tk.Label(
+                card,
+                textvariable=self.deal_kpi_vars[key],
+                bg=background,
+                fg=foreground,
+                font=("Segoe UI Semibold", 19),
+            ).pack(anchor="w")
+            tk.Label(
+                card,
+                text=label,
+                bg=background,
+                fg=TEXT,
+                font=("Segoe UI Semibold", 8),
+            ).pack(anchor="w", pady=(2, 0))
+            desk_kpis.columnconfigure(column, weight=1)
 
         desk_pane = ttk.Panedwindow(
             deal_desk_tab, orient="horizontal"
@@ -6125,6 +7266,36 @@ class App(tk.Tk):
             "<<TreeviewSelect>>",
             lambda _event: self._load_selected_queue_item(),
         )
+        self.deal_tree.tag_configure(
+            "pending",
+            background="#F8FBFE",
+            foreground=TEXT,
+        )
+        self.deal_tree.tag_configure(
+            "verification",
+            background="#FFF7E5",
+            foreground="#7A4A00",
+        )
+        self.deal_tree.tag_configure(
+            "approved",
+            background="#ECF8F2",
+            foreground="#12633E",
+        )
+        self.deal_tree.tag_configure(
+            "rejected",
+            background="#FDEEEE",
+            foreground="#8A221B",
+        )
+        self.deal_tree.tag_configure(
+            "synced",
+            background="#EDF5FC",
+            foreground="#064E8B",
+        )
+        self.deal_tree.tag_configure(
+            "enrolled",
+            background="#F2EEFA",
+            foreground="#55348C",
+        )
 
         self.review_queue_id = tk.StringVar()
         self.review_company = tk.StringVar()
@@ -6137,23 +7308,43 @@ class App(tk.Tk):
         self.review_contact_source = tk.StringVar(value="")
         self.review_subject = tk.StringVar()
         self.review_notes = tk.StringVar()
+        self.review_metric_vars = {
+            "decision": tk.StringVar(value="—"),
+            "email": tk.StringVar(value="—"),
+            "phone": tk.StringVar(value="—"),
+            "inbox": tk.StringVar(value="—"),
+            "outreach": tk.StringVar(value="—"),
+        }
+        self.review_company_detail = tk.StringVar(
+            value="Select a company and contact from the review queue."
+        )
+        self.review_recommendation = tk.StringVar(
+            value="Contact recommendation will appear here."
+        )
+        self.review_email_detail = tk.StringVar(
+            value="Email quality and verification status"
+        )
+        self.review_phone_detail = tk.StringVar(
+            value="Phone quality and source status"
+        )
 
         summary_card = tk.Frame(
             review_frame,
-            bg=SURFACE_ALT,
+            bg=SURFACE,
             highlightthickness=1,
             highlightbackground=BORDER,
-            padx=12,
-            pady=10,
+            padx=14,
+            pady=12,
         )
         summary_card.pack(fill="x", pady=(0, 10))
+
         priority_banner = tk.Frame(
             summary_card,
             bg=ACCENT,
-            padx=10,
-            pady=7,
+            padx=11,
+            pady=8,
         )
-        priority_banner.pack(fill="x", pady=(0, 9))
+        priority_banner.pack(fill="x", pady=(0, 10))
         tk.Label(
             priority_banner,
             textvariable=self.review_outreach_order,
@@ -6169,30 +7360,138 @@ class App(tk.Tk):
             font=("Segoe UI", 9),
         ).pack(side="right")
 
+        identity_row = tk.Frame(summary_card, bg=SURFACE)
+        identity_row.pack(fill="x")
+        identity_copy = tk.Frame(identity_row, bg=SURFACE)
+        identity_copy.pack(side="left", fill="x", expand=True)
         tk.Label(
-            summary_card,
+            identity_copy,
             textvariable=self.review_company,
-            bg=SURFACE_ALT, fg=NAVY,
-            font=("Segoe UI Semibold", 14),
+            bg=SURFACE,
+            fg=NAVY,
+            font=("Segoe UI Semibold", 16),
         ).pack(anchor="w")
         tk.Label(
-            summary_card,
+            identity_copy,
             textvariable=self.review_contact,
-            bg=SURFACE_ALT, fg=TEXT,
-            font=("Segoe UI", 10),
+            bg=SURFACE,
+            fg=TEXT,
+            font=("Segoe UI Semibold", 10),
         ).pack(anchor="w", pady=(3, 0))
         tk.Label(
-            summary_card,
+            identity_copy,
             textvariable=self.review_strategy,
-            bg=SURFACE_ALT, fg=ACCENT,
+            bg=SURFACE,
+            fg=ACCENT,
             font=("Segoe UI Semibold", 9),
         ).pack(anchor="w", pady=(5, 0))
         tk.Label(
-            summary_card,
-            textvariable=self.review_confidence,
-            bg=SURFACE_ALT, fg=MUTED,
+            identity_copy,
+            textvariable=self.review_company_detail,
+            bg=SURFACE,
+            fg=MUTED,
+            justify="left",
+            wraplength=680,
             font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(5, 0))
+
+        confidence_badge = tk.Frame(
+            identity_row,
+            bg=NAVY,
+            padx=13,
+            pady=10,
+        )
+        confidence_badge.pack(side="right", padx=(12, 0))
+        tk.Label(
+            confidence_badge,
+            text="OUTREACH",
+            bg=NAVY,
+            fg="#87B7DD",
+            font=("Segoe UI Semibold", 7),
+        ).pack()
+        tk.Label(
+            confidence_badge,
+            textvariable=self.review_metric_vars["outreach"],
+            bg=NAVY,
+            fg=WHITE,
+            font=("Segoe UI Semibold", 20),
+        ).pack()
+        tk.Label(
+            confidence_badge,
+            textvariable=self.review_confidence,
+            bg=NAVY,
+            fg="#CFE3F6",
+            wraplength=150,
+            justify="center",
+            font=("Segoe UI", 7),
+        ).pack(pady=(2, 0))
+
+        score_row = tk.Frame(summary_card, bg=SURFACE)
+        score_row.pack(fill="x", pady=(12, 0))
+        score_specs = [
+            ("Decision Maker", "decision", "#EDF5FC", ACCENT),
+            ("Email Quality", "email", "#ECF8F2", SUCCESS),
+            ("Phone Quality", "phone", "#F4F0FB", "#6545A4"),
+            ("Inbox Ready", "inbox", "#FFF4DB", WARNING),
+        ]
+        for column, (label, key, background, foreground) in enumerate(
+            score_specs
+        ):
+            score_card = tk.Frame(
+                score_row,
+                bg=background,
+                padx=10,
+                pady=8,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+            )
+            score_card.grid(
+                row=0,
+                column=column,
+                sticky="nsew",
+                padx=(0 if column == 0 else 5, 0),
+            )
+            tk.Label(
+                score_card,
+                text=label.upper(),
+                bg=background,
+                fg=MUTED,
+                font=("Segoe UI Semibold", 7),
+            ).pack(anchor="w")
+            tk.Label(
+                score_card,
+                textvariable=self.review_metric_vars[key],
+                bg=background,
+                fg=foreground,
+                font=("Segoe UI Semibold", 17),
+            ).pack(anchor="w", pady=(2, 0))
+            score_row.columnconfigure(column, weight=1)
+
+        recommendation_card = tk.Frame(
+            summary_card,
+            bg="#F4F8FC",
+            padx=11,
+            pady=9,
+            highlightthickness=1,
+            highlightbackground="#D8E4EF",
+        )
+        recommendation_card.pack(fill="x", pady=(10, 0))
+        tk.Label(
+            recommendation_card,
+            text="WHY THIS CONTACT",
+            bg="#F4F8FC",
+            fg=MUTED,
+            font=("Segoe UI Semibold", 7),
         ).pack(anchor="w")
+        tk.Label(
+            recommendation_card,
+            textvariable=self.review_recommendation,
+            bg="#F4F8FC",
+            fg=TEXT,
+            justify="left",
+            wraplength=900,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(3, 0))
 
         review_notebook = ttk.Notebook(review_frame)
         review_notebook.pack(fill="both", expand=True, pady=(0, 10))
@@ -6222,7 +7521,8 @@ class App(tk.Tk):
         ttk.Entry(email_tab, textvariable=self.review_notes).pack(fill="x", pady=(4, 0))
 
         intelligence_header = ttk.Frame(
-            intelligence_tab, style="Card.TFrame"
+            intelligence_tab,
+            style="Card.TFrame",
         )
         intelligence_header.pack(fill="x", pady=(0, 8))
         ttk.Label(
@@ -6233,11 +7533,127 @@ class App(tk.Tk):
         ttk.Label(
             intelligence_header,
             text=(
-                "Why this person ranked here, how they were found, "
-                "and how reliable the contact details are."
+                "Ranking rationale, contactability, verification, and "
+                "recommended outreach order."
             ),
             style="Muted.TLabel",
         ).pack(side="left", padx=(10, 0))
+
+        intelligence_score_row = tk.Frame(
+            intelligence_tab,
+            bg=SURFACE,
+        )
+        intelligence_score_row.pack(fill="x", pady=(0, 8))
+
+        self.contact_intelligence_metric_vars = {
+            "rank": tk.StringVar(value="—"),
+            "decision": tk.StringVar(value="—"),
+            "email": tk.StringVar(value="—"),
+            "phone": tk.StringVar(value="—"),
+        }
+        intelligence_specs = [
+            ("Outreach Rank", "rank"),
+            ("Decision Confidence", "decision"),
+            ("Email Confidence", "email"),
+            ("Phone Confidence", "phone"),
+        ]
+        for column, (label, key) in enumerate(intelligence_specs):
+            card = tk.Frame(
+                intelligence_score_row,
+                bg="#F4F8FC",
+                padx=10,
+                pady=8,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+            )
+            card.grid(
+                row=0,
+                column=column,
+                sticky="nsew",
+                padx=(0 if column == 0 else 5, 0),
+            )
+            tk.Label(
+                card,
+                text=label.upper(),
+                bg="#F4F8FC",
+                fg=MUTED,
+                font=("Segoe UI Semibold", 7),
+            ).pack(anchor="w")
+            tk.Label(
+                card,
+                textvariable=self.contact_intelligence_metric_vars[key],
+                bg="#F4F8FC",
+                fg=NAVY if key == "rank" else ACCENT,
+                font=("Segoe UI Semibold", 15),
+            ).pack(anchor="w", pady=(2, 0))
+            intelligence_score_row.columnconfigure(column, weight=1)
+
+        quality_row = tk.Frame(
+            intelligence_tab,
+            bg=SURFACE,
+        )
+        quality_row.pack(fill="x", pady=(0, 8))
+        email_quality = tk.Frame(
+            quality_row,
+            bg="#ECF8F2",
+            padx=11,
+            pady=8,
+            highlightthickness=1,
+            highlightbackground="#CBE8D9",
+        )
+        email_quality.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(0, 4),
+        )
+        tk.Label(
+            email_quality,
+            text="EMAIL INTELLIGENCE",
+            bg="#ECF8F2",
+            fg=SUCCESS,
+            font=("Segoe UI Semibold", 7),
+        ).pack(anchor="w")
+        tk.Label(
+            email_quality,
+            textvariable=self.review_email_detail,
+            bg="#ECF8F2",
+            fg=TEXT,
+            justify="left",
+            wraplength=430,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(3, 0))
+
+        phone_quality = tk.Frame(
+            quality_row,
+            bg="#F2EEFA",
+            padx=11,
+            pady=8,
+            highlightthickness=1,
+            highlightbackground="#DCCFF1",
+        )
+        phone_quality.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(4, 0),
+        )
+        tk.Label(
+            phone_quality,
+            text="PHONE INTELLIGENCE",
+            bg="#F2EEFA",
+            fg="#6545A4",
+            font=("Segoe UI Semibold", 7),
+        ).pack(anchor="w")
+        tk.Label(
+            phone_quality,
+            textvariable=self.review_phone_detail,
+            bg="#F2EEFA",
+            fg=TEXT,
+            justify="left",
+            wraplength=430,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(3, 0))
 
         self.contact_intelligence_text = tk.Text(
             intelligence_tab,
@@ -6249,8 +7665,10 @@ class App(tk.Tk):
             font=("Segoe UI", 10),
             padx=12,
             pady=10,
+            height=12,
         )
         self.contact_intelligence_text.pack(fill="both", expand=True)
+
         acquisition_header = ttk.Frame(
             acquisition_tab, style="Card.TFrame"
         )
@@ -6396,22 +7814,26 @@ class App(tk.Tk):
         integration.columnconfigure(1, weight=1)
 
         # Deliverability Center
-        delivery_header = ttk.Frame(
-            deliverability_tab, style="Card.TFrame"
+        delivery_header = tk.Frame(
+            deliverability_tab, bg=NAVY, padx=20, pady=15
         )
         delivery_header.pack(fill="x", pady=(0, 12))
-        ttk.Label(
+        tk.Label(
+            delivery_header, text="OUTREACH QUALITY",
+            bg=NAVY, fg="#75B6F5",
+            font=("Segoe UI Semibold", 8),
+        ).pack(anchor="w")
+        tk.Label(
+            delivery_header, text="Deliverability Center",
+            bg=NAVY, fg=WHITE,
+            font=("Segoe UI Semibold", 19),
+        ).pack(anchor="w", pady=(2, 1))
+        tk.Label(
             delivery_header,
-            text="Deliverability Center",
-            style="SectionTitle.TLabel",
-        ).pack(side="left")
-        ttk.Label(
-            delivery_header,
-            text=(
-                "Heuristic risk reduction—no software can guarantee inbox placement."
-            ),
-            style="Muted.TLabel",
-        ).pack(side="left", padx=(12, 0))
+            text="Reduce avoidable inbox risk, improve messaging quality, and record real-world outcomes.",
+            bg=NAVY, fg="#CFE3F6",
+            font=("Segoe UI", 9),
+        ).pack(anchor="w")
 
         delivery_pane = ttk.Panedwindow(
             deliverability_tab, orient="horizontal"
@@ -6556,8 +7978,9 @@ class App(tk.Tk):
         ).pack(anchor="w")
         self.delivery_issues = tk.Text(
             detail_frame, height=7, wrap="word",
-            bg="#FFF7F5", fg=ERROR, relief="solid", bd=1,
-            font=("Segoe UI", 9),
+            bg="#FFF9F7", fg=ERROR, relief="flat", bd=0,
+            highlightthickness=1, highlightbackground="#F0C9C0",
+            font=("Segoe UI", 9), padx=10, pady=8,
         )
         self.delivery_issues.pack(fill="x", pady=(5, 12))
 
@@ -6567,8 +7990,9 @@ class App(tk.Tk):
         ).pack(anchor="w")
         self.delivery_recommendations = tk.Text(
             detail_frame, height=7, wrap="word",
-            bg="#F5FAFF", fg=NAVY, relief="solid", bd=1,
-            font=("Segoe UI", 9),
+            bg="#F5FAFF", fg=NAVY, relief="flat", bd=0,
+            highlightthickness=1, highlightbackground="#C8DDF0",
+            font=("Segoe UI", 9), padx=10, pady=8,
         )
         self.delivery_recommendations.pack(fill="x", pady=(5, 12))
 
@@ -7328,6 +8752,81 @@ class App(tk.Tk):
         self.log.see("end")
         self.log.configure(state="disabled")
 
+        self._dashboard_from_log(str(message))
+
+    def _dashboard_from_log(self, message: str):
+        """Presentation-only parsing of existing engine log messages."""
+        if not hasattr(self, "preview_vars"):
+            return
+        line = (message or "").strip()
+        lower = line.lower()
+
+        returned = re.search(
+            r"zoominfo returned\s+(\d+)\s+companies",
+            lower,
+        )
+        if returned:
+            self._update_funnel("zoominfo", int(returned.group(1)), add=True)
+
+        if "tavily" in lower and (
+            "research" in lower
+            or "verification" in lower
+        ):
+            self.preview_vars["phase"].set("TAVILY RESEARCH")
+
+        if lower.startswith("qualified "):
+            match = re.search(
+                r"qualified\s+\d+/\d+:\s+(.+?)\s+\(([\d.]+)\)",
+                line,
+                re.I,
+            )
+            if match:
+                self.preview_vars["company"].set(match.group(1))
+                self.preview_vars["score"].set(match.group(2))
+                self.preview_vars["phase"].set("QUALIFIED")
+                self.preview_vars["detail"].set(
+                    "Accepted into the qualified list. "
+                    "Compass is now ranking decision-makers and recovering "
+                    "the best available contact data."
+                )
+
+        if (
+            "skipped" in lower
+            or lower.startswith("rejected")
+            or "outside target geography" in lower
+        ):
+            self.preview_vars["phase"].set("FILTERED")
+            if (
+                lower.startswith("rejected")
+                or " skipped " in lower
+                or lower.startswith("master db skipped")
+                or lower.startswith("hubspot csv index skipped")
+            ):
+                self._update_funnel("rejected", 1, add=True)
+
+    def _update_funnel(
+        self,
+        key: str,
+        value: int,
+        *,
+        add: bool = False,
+    ):
+        if not hasattr(self, "funnel_counts") or key not in self.funnel_counts:
+            return
+        if add:
+            self.funnel_counts[key] += int(value)
+        else:
+            self.funnel_counts[key] = int(value)
+        self.funnel_vars[key].set(f"{self.funnel_counts[key]:,}")
+
+    def _set_prospect_preview(self, payload: dict[str, Any]):
+        if not hasattr(self, "preview_vars"):
+            return
+        for key in self.preview_vars:
+            if key in payload and payload[key] not in (None, ""):
+                self.preview_vars[key].set(str(payload[key]))
+
+
     def _load_settings(self):
         if SETTINGS_FILE.exists():
             try:
@@ -7413,6 +8912,7 @@ class App(tk.Tk):
             keyring.set_password(SERVICE, "tavily_api_key", self.tavily_key.get())
         if self.hubspot_token.get():
             keyring.set_password(SERVICE, "hubspot_token", self.hubspot_token.get())
+        self._refresh_connection_status()
         messagebox.showinfo(APP_TITLE, "Credentials saved securely in Windows Credential Manager.")
 
     def _save_settings(self):
@@ -8149,21 +9649,68 @@ class App(tk.Tk):
         self.review_queue = load_outreach_queue()
         self.deal_tree.delete(*self.deal_tree.get_children())
         selected_filter = self.deal_desk_filter.get()
+
+        counts = {
+            "pending": 0,
+            "verification": 0,
+            "approved": 0,
+            "synced": 0,
+            "enrolled": 0,
+        }
         for item in self.review_queue:
+            if item.status == "Pending Review":
+                counts["pending"] += 1
+            if item.contact_email_verification_status in {
+                "Needs Verification",
+                "Missing",
+            }:
+                counts["verification"] += 1
+            if item.status == "Approved":
+                counts["approved"] += 1
+            if item.hubspot_status == "Synced":
+                counts["synced"] += 1
+            if item.enrollment_status == "Enrolled":
+                counts["enrolled"] += 1
+
             if selected_filter != "All":
-                if selected_filter == "Synced" and item.hubspot_status != "Synced":
+                if (
+                    selected_filter == "Synced"
+                    and item.hubspot_status != "Synced"
+                ):
                     continue
-                elif selected_filter == "Enrolled" and item.enrollment_status != "Enrolled":
+                elif (
+                    selected_filter == "Enrolled"
+                    and item.enrollment_status != "Enrolled"
+                ):
                     continue
                 elif selected_filter == "Needs Verification":
                     if item.contact_email_verification_status not in {
-                        "Needs Verification", "Missing"
+                        "Needs Verification",
+                        "Missing",
                     }:
                         continue
                 elif selected_filter not in {
-                    "Synced", "Enrolled", "Needs Verification"
+                    "Synced",
+                    "Enrolled",
+                    "Needs Verification",
                 } and item.status != selected_filter:
                     continue
+
+            tag = "pending"
+            if item.enrollment_status == "Enrolled":
+                tag = "enrolled"
+            elif item.hubspot_status == "Synced":
+                tag = "synced"
+            elif item.status == "Approved":
+                tag = "approved"
+            elif item.status == "Rejected":
+                tag = "rejected"
+            elif item.contact_email_verification_status in {
+                "Needs Verification",
+                "Missing",
+            }:
+                tag = "verification"
+
             self.deal_tree.insert(
                 "",
                 "end",
@@ -8190,7 +9737,12 @@ class App(tk.Tk):
                     item.hubspot_status,
                     item.enrollment_status,
                 ),
+                tags=(tag,),
             )
+
+        if hasattr(self, "deal_kpi_vars"):
+            for key, value in counts.items():
+                self.deal_kpi_vars[key].set(f"{value:,}")
 
     def _load_selected_queue_item(self):
         if not hasattr(self, "deal_tree"):
@@ -8234,7 +9786,6 @@ class App(tk.Tk):
             f"Recommended strategy: {item.recommended_strategy}"
         )
         self.review_confidence.set(
-            f"Outreach confidence: {item.outreach_confidence}% | "
             f"Review status: {item.status}"
         )
         self.review_subject.set(item.subject_line)
@@ -8278,45 +9829,112 @@ class App(tk.Tk):
             or "No source URL was stored."
         )
 
+        self.review_metric_vars["outreach"].set(
+            f"{item.outreach_confidence or 0}%"
+        )
+        self.review_metric_vars["decision"].set(
+            f"{decision_confidence}%"
+        )
+        self.review_metric_vars["email"].set(
+            (
+                f"{item.contact_email_confidence}%"
+                if item.contact_email
+                else "Missing"
+            )
+        )
+        self.review_metric_vars["phone"].set(
+            (
+                f"{item.contact_phone_confidence}%"
+                if item.contact_phone
+                else (
+                    "Company #"
+                    if item.contact_public_company_phone
+                    else "Missing"
+                )
+            )
+        )
+        self.review_metric_vars["inbox"].set(
+            (
+                f"{item.inbox_readiness_score}%"
+                if item.inbox_readiness_score
+                else "—"
+            )
+        )
+        self.review_company_detail.set(
+            " · ".join(
+                part
+                for part in [
+                    (
+                        f"{item.company_city}, {item.company_state}"
+                        if item.company_city and item.company_state
+                        else item.company_state
+                    ),
+                    (
+                        f"${item.company_revenue:,.0f} revenue"
+                        if item.company_revenue
+                        else ""
+                    ),
+                    (
+                        f"{item.company_employees:,} employees"
+                        if item.company_employees
+                        else ""
+                    ),
+                ]
+                if part
+            )
+            or "Company size and location were not stored."
+        )
+        self.review_recommendation.set(recommendation_reason)
+        self.review_email_detail.set(
+            (
+                f"{item.contact_email or 'No email found'} · "
+                f"{email_status} · "
+                f"{item.contact_email_confidence or 0}% confidence · "
+                f"{item.contact_email_verification_status or 'Not verified'}"
+            )
+        )
+        self.review_phone_detail.set(
+            (
+                f"{item.contact_phone or item.contact_public_company_phone or 'No phone found'} · "
+                f"{phone_status} · "
+                f"{item.contact_phone_confidence or 0}% confidence"
+            )
+        )
+        if hasattr(self, "contact_intelligence_metric_vars"):
+            self.contact_intelligence_metric_vars["rank"].set(
+                f"#{order}" if order else item.contact_rank or "—"
+            )
+            self.contact_intelligence_metric_vars["decision"].set(
+                f"{decision_confidence}%"
+            )
+            self.contact_intelligence_metric_vars["email"].set(
+                f"{item.contact_email_confidence or 0}%"
+            )
+            self.contact_intelligence_metric_vars["phone"].set(
+                f"{item.contact_phone_confidence or 0}%"
+            )
+
         intelligence = (
-            "RECOMMENDED OUTREACH ORDER\n"
-            f"#{order if order else '?'} — {order_label}\n\n"
-            "CONTACT\n"
-            f"{item.contact_name}\n"
-            f"{item.contact_title}\n"
-            f"Company: {item.company_name}\n\n"
-            "DECISION-MAKER SCORE\n"
-            f"{decision_confidence}%\n\n"
-            "HOW THE CONTACT WAS FOUND\n"
-            f"{source_type}\n"
-            f"Evidence/source: {source_urls}\n\n"
-            "EMAIL INTELLIGENCE\n"
-            f"Address: {item.contact_email or 'Not found'}\n"
-            f"Status: {email_status}\n"
-            f"Confidence: {item.contact_email_confidence or 0}%\n"
-            f"Pattern used: "
-            f"{item.contact_predicted_email_pattern or 'None'}\n"
-            f"Pattern support: "
-            f"{item.contact_pattern_support_count or 0} example(s)\n"
-            f"Verification status: "
+            "WHY THIS PERSON RANKED HERE\n"
+            f"• {recommendation_reason}\n"
+            f"• Outreach order: #{order if order else '?'} — {order_label}\n"
+            f"• Decision-maker confidence: {decision_confidence}%\n"
+            f"• Discovery source: {source_type}\n\n"
+            "CONTACTABILITY\n"
+            f"• Email: {item.contact_email or 'Not found'}\n"
+            f"• Email status: {email_status}\n"
+            f"• Verification: "
             f"{item.contact_email_verification_status or 'Unknown'}\n"
-            f"Recovery method: "
+            f"• Recovery method: "
             f"{item.contact_email_recovery_method or 'Not used'}\n"
-            f"Domain mail status: "
-            f"{item.contact_domain_mail_status or 'Not checked'}\n"
-            f"Domain detail: "
-            f"{item.contact_domain_mail_detail or 'No detail'}\n\n"
-            "PHONE INTELLIGENCE\n"
-            f"Direct/mobile: {item.contact_phone or 'Not found'}\n"
-            f"Public company phone: "
-            f"{item.contact_public_company_phone or 'Not found'}\n"
-            f"Status: {phone_status}\n"
-            f"Confidence: {item.contact_phone_confidence or 0}%\n\n"
-            "WHY THIS PERSON IS RECOMMENDED\n"
-            f"{recommendation_reason}\n\n"
+            f"• Phone: "
+            f"{item.contact_phone or item.contact_public_company_phone or 'Not found'}\n"
+            f"• Phone status: {phone_status}\n\n"
             "LIVE RESEARCH SUMMARY\n"
             f"{research_summary}\n\n"
-            "CONTACT DATA STATUS\n"
+            "SOURCE EVIDENCE\n"
+            f"{source_urls}\n\n"
+            "DATA STATUS\n"
             f"{item.contact_data_status or 'No detailed status recorded.'}"
         )
         self.contact_intelligence_text.delete("1.0", "end")
@@ -8890,7 +10508,7 @@ class App(tk.Tk):
         )
         canvas.create_text(
             260, 160,
-            text="Darwill AI Prospector",
+            text="DARWILL Compass",
             fill=WHITE,
             font=("Segoe UI Semibold", 22),
         )
@@ -8916,7 +10534,7 @@ class App(tk.Tk):
 
     def _show_about(self):
         dialog = tk.Toplevel(self)
-        dialog.title("About Darwill AI Prospector")
+        dialog.title("About Darwill Compass")
         dialog.geometry("520x430")
         dialog.resizable(False, False)
         dialog.transient(self)
@@ -8941,7 +10559,7 @@ class App(tk.Tk):
         title.pack(side="left", pady=26)
         tk.Label(
             title,
-            text="Darwill AI Prospector",
+            text="DARWILL Compass",
             bg=NAVY,
             fg=WHITE,
             font=("Segoe UI Semibold", 18),
@@ -8975,7 +10593,7 @@ class App(tk.Tk):
         tk.Frame(content, bg=BORDER, height=1).pack(fill="x", pady=18)
 
         details = [
-            ("Product", "Darwill AI Prospector"),
+            ("Product", "Darwill Compass"),
             ("Developer", DEVELOPER_NAME),
             ("Platform", "ZoomInfo MCP + Tavily Intelligence"),
             ("Release", f"Version {PRODUCT_VERSION}"),
@@ -9012,6 +10630,17 @@ class App(tk.Tk):
         ).pack(anchor="e", pady=(24, 0))
 
     def _update_advanced_visibility(self):
+        advanced_panel = getattr(
+            self,
+            "advanced_profile_panel",
+            None,
+        )
+        if advanced_panel:
+            if self.show_advanced.get():
+                advanced_panel.pack(fill="x", pady=(12, 0))
+            else:
+                advanced_panel.pack_forget()
+
         widgets = [
             getattr(self, "custom_keywords_label", None),
             getattr(self, "custom_keywords_entry", None),
@@ -9022,9 +10651,121 @@ class App(tk.Tk):
             if not widget:
                 continue
             if self.show_advanced.get():
-                widget.grid()
+                widget.pack()
             else:
-                widget.grid_remove()
+                widget.pack_forget()
+
+    def _toggle_connection_manager(self):
+        panel = getattr(self, "credentials_panel", None)
+        if not panel:
+            return
+        expanded = not self.connections_expanded.get()
+        self.connections_expanded.set(expanded)
+        if expanded:
+            panel.pack(fill="x", pady=(12, 0))
+        else:
+            panel.pack_forget()
+
+    def _normalize_profile_number(self, variable):
+        parsed = parse_number(variable.get())
+        if parsed is not None:
+            variable.set(f"{parsed:,}")
+
+    def _selected_state_codes(self) -> list[str]:
+        return [
+            value.strip().upper()
+            for value in self.states.get().split(",")
+            if value.strip()
+        ]
+
+    def _render_state_chips(self):
+        frame = getattr(self, "state_chip_frame", None)
+        if not frame:
+            return
+        for widget in frame.winfo_children():
+            widget.destroy()
+
+        state_codes = [
+            "TX", "AZ", "CO", "OK", "NM",
+            "NV", "UT", "ID", "WY", "MT",
+        ]
+        selected = set(self._selected_state_codes())
+        self.state_chip_buttons = {}
+
+        for index, code in enumerate(state_codes):
+            is_selected = code in selected
+            button = tk.Button(
+                frame,
+                text=("✓  " if is_selected else "") + code,
+                command=lambda state=code: self._toggle_state_chip(state),
+                bg=ACCENT if is_selected else "#EEF4F9",
+                fg=WHITE if is_selected else NAVY,
+                activebackground=ACCENT_HOVER if is_selected else BLUE_LIGHT,
+                activeforeground=WHITE if is_selected else NAVY,
+                relief="flat",
+                bd=0,
+                padx=14,
+                pady=8,
+                cursor="hand2",
+                font=("Segoe UI Semibold", 9),
+            )
+            button.grid(
+                row=index // 10,
+                column=index % 10,
+                sticky="ew",
+                padx=(0, 7),
+                pady=4,
+            )
+            self.state_chip_buttons[code] = button
+
+        for column in range(10):
+            frame.columnconfigure(column, weight=1)
+
+    def _toggle_state_chip(self, code: str):
+        selected = self._selected_state_codes()
+        if code in selected:
+            selected = [
+                item for item in selected
+                if item != code
+            ]
+        else:
+            selected.append(code)
+
+        preferred_order = [
+            "TX", "AZ", "CO", "OK", "NM",
+            "NV", "UT", "ID", "WY", "MT",
+        ]
+        selected_set = set(selected)
+        ordered = [
+            item for item in preferred_order
+            if item in selected_set
+        ]
+        ordered.extend(
+            item for item in selected
+            if item not in preferred_order
+        )
+        self.states.set(",".join(ordered))
+        self._render_state_chips()
+
+    def _sync_state_chips(self):
+        if hasattr(self, "state_chip_frame"):
+            self._render_state_chips()
+
+    def _refresh_connection_status(self):
+        if hasattr(self, "zoominfo_connection_status"):
+            self.zoominfo_connection_status.set(
+                "●  Configured"
+                if self.client_id.get().strip()
+                and self.client_secret.get().strip()
+                else "○  Not configured"
+            )
+        if hasattr(self, "tavily_connection_status"):
+            self.tavily_connection_status.set(
+                "●  Configured"
+                if self.tavily_key.get().strip()
+                else "○  Not configured"
+            )
+
 
     def _save_feedback(self):
         company = self.feedback_company.get().strip()
@@ -9089,23 +10830,46 @@ class App(tk.Tk):
             return
         for widget in self.trade_checkbox_frame.winfo_children():
             widget.destroy()
+
+        self.trade_chip_buttons = {}
         for index, name in enumerate(sorted(self.trade_presets)):
             if name not in self.trade_vars:
                 self.trade_vars[name] = tk.BooleanVar(value=False)
-            ttk.Checkbutton(
+
+            selected = self.trade_vars[name].get()
+            button = tk.Button(
                 self.trade_checkbox_frame,
-                text=name,
-                variable=self.trade_vars[name],
-                command=self._refresh_trade_preview,
-            ).grid(
+                text=("✓  " if selected else "") + name,
+                command=lambda trade=name: self._toggle_trade_chip(trade),
+                bg=ACCENT if selected else "#EEF4F9",
+                fg=WHITE if selected else NAVY,
+                activebackground=ACCENT_HOVER if selected else BLUE_LIGHT,
+                activeforeground=WHITE if selected else NAVY,
+                relief="flat",
+                bd=0,
+                padx=14,
+                pady=8,
+                cursor="hand2",
+                font=("Segoe UI Semibold", 9),
+            )
+            button.grid(
                 row=index // 4,
                 column=index % 4,
-                sticky="w",
-                padx=(0, 22),
-                pady=3,
+                sticky="ew",
+                padx=(0, 8),
+                pady=4,
             )
+            self.trade_chip_buttons[name] = button
+
         for col in range(4):
             self.trade_checkbox_frame.columnconfigure(col, weight=1)
+
+    def _toggle_trade_chip(self, name: str):
+        variable = self.trade_vars[name]
+        variable.set(not variable.get())
+        self._render_trade_checkboxes()
+        self._refresh_trade_preview()
+
 
     def _save_trade_presets(self):
         TRADE_PRESETS_FILE.write_text(
@@ -9387,7 +11151,9 @@ class App(tk.Tk):
         if selected_trades:
             for name, variable in self.trade_vars.items():
                 variable.set(name in selected_trades)
+        self._render_trade_checkboxes()
         self._refresh_trade_preview()
+        self._sync_state_chips()
         self._update_search_mode()
 
     def _save_profile(self):
@@ -9613,6 +11379,24 @@ class App(tk.Tk):
             if variable is not self.metric_vars["eta"]:
                 variable.set("0")
         self.metric_vars["eta"].set("Calculating…")
+        if hasattr(self, "funnel_counts"):
+            for key in self.funnel_counts:
+                self._update_funnel(key, 0)
+        if hasattr(self, "preview_vars"):
+            self._set_prospect_preview({
+                "company": "Connecting to ZoomInfo MCP…",
+                "phase": "STARTING",
+                "location": "—",
+                "size": "—",
+                "score": "—",
+                "residential": "—",
+                "growth": "—",
+                "contact": "No contact ranked yet",
+                "detail": (
+                    "Compass is preparing the saved profile, duplicate "
+                    "protection, and live research services."
+                ),
+            })
         self.run_button.configure(state="disabled")
         self.stop_button.configure(state="normal")
         self.progress.start(10)
@@ -9913,6 +11697,38 @@ class App(tk.Tk):
                         seen_company_ids.add(prospect.company_id)
                         candidates_reviewed += 1
                         self.events.put(("metrics", {"reviewed": candidates_reviewed}))
+                        self.events.put(("funnel", {
+                            "reviewed": candidates_reviewed,
+                        }))
+                        self.events.put(("prospect_preview", {
+                            "company": prospect.company_name,
+                            "phase": "HARD FILTERS",
+                            "location": ", ".join(
+                                item for item in [prospect.city, prospect.state]
+                                if item
+                            ) or "Location unavailable",
+                            "size": (
+                                f"${prospect.revenue:,.0f} revenue · "
+                                f"{prospect.employees:,} employees"
+                                if prospect.revenue and prospect.employees
+                                else (
+                                    f"${prospect.revenue:,.0f} revenue"
+                                    if prospect.revenue
+                                    else (
+                                        f"{prospect.employees:,} employees"
+                                        if prospect.employees
+                                        else "Company size unavailable"
+                                    )
+                                )
+                            ),
+                            "score": "Pending",
+                            "residential": "Pending",
+                            "growth": "Pending",
+                            "detail": (
+                                f"Evaluating {trade} fit, geography, duplicate "
+                                "protection, and CRM history before live research."
+                            ),
+                        }))
 
                         returned_state = normalize_state(prospect.state)
                         if allowed_states and returned_state not in allowed_states:
@@ -9973,7 +11789,35 @@ class App(tk.Tk):
                             continue
 
                         # Live public verification first; free of ZoomInfo AI credits.
+                        self.events.put(("prospect_preview", {
+                            "company": prospect.company_name,
+                            "phase": "TAVILY RESEARCH",
+                            "detail": (
+                                "Verifying residential focus, business model, "
+                                "service territory, growth activity, marketing "
+                                "maturity, and technology signals."
+                            ),
+                        }))
                         research_company(tavily, prospect)
+                        self.events.put(("funnel_add", {"researched": 1}))
+                        self.events.put(("prospect_preview", {
+                            "company": prospect.company_name,
+                            "phase": "QUALIFICATION",
+                            "score": f"{prospect.fit_score:.0f}",
+                            "residential": (
+                                prospect.residential_signals
+                                or "No strong signal"
+                            ),
+                            "growth": (
+                                prospect.growth_signals
+                                or "No current signal"
+                            ),
+                            "detail": (
+                                prospect.acceptance_reason
+                                or prospect.company_summary
+                                or "Live company research completed."
+                            ),
+                        }))
                         if prospect.fit_score < minimum_fit or prospect.exclusion_signals:
                             reason = prospect.acceptance_reason or "Failed live company qualification"
                             history.save(
@@ -10000,6 +11844,13 @@ class App(tk.Tk):
                             qualification_decisions.append(
                                 qualification_result(prospect, "Rejected", reason, trade)
                             )
+                            self.events.put(("funnel_add", {"rejected": 1}))
+                            self.events.put(("prospect_preview", {
+                                "company": prospect.company_name,
+                                "phase": "REJECTED",
+                                "score": f"{prospect.fit_score:.0f}",
+                                "detail": reason,
+                            }))
                             continue
 
                         # CRM relationship check through ZoomInfo Account Research, only
@@ -10078,6 +11929,26 @@ class App(tk.Tk):
                             f"Qualified {len(qualified)}/{target_count}: "
                             f"{prospect.company_name} ({prospect.fit_score:.0f})"
                         )
+                        self.events.put(("funnel", {
+                            "qualified": len(qualified),
+                        }))
+                        self.events.put(("prospect_preview", {
+                            "company": prospect.company_name,
+                            "phase": "QUALIFIED",
+                            "score": f"{prospect.fit_score:.0f}",
+                            "residential": (
+                                prospect.residential_signals
+                                or "Verified"
+                            ),
+                            "growth": (
+                                prospect.growth_signals
+                                or "No current signal"
+                            ),
+                            "detail": (
+                                prospect.acceptance_reason
+                                or "Qualified by the proven 3.6 engine."
+                            ),
+                        }))
                         elapsed = max(1.0, time.time() - self.run_started_at)
                         rate = len(qualified) / elapsed
                         remaining = max(0, target_count - len(qualified))
@@ -10437,6 +12308,25 @@ class App(tk.Tk):
                                 f"contactability, and decision-maker confidence."
                             )
                             ranked_contacts.append(contact)
+                            self.events.put(("funnel", {
+                                "contacts": len(ranked_contacts),
+                            }))
+                            if contact.rank == "Primary":
+                                self.events.put(("prospect_preview", {
+                                    "company": prospect.company_name,
+                                    "phase": "CONTACT RANKING",
+                                    "contact": (
+                                        f"{contact.first_name} {contact.last_name} — "
+                                        f"{contact.title}. "
+                                        f"{contact.recommendation_reason}"
+                                    ),
+                                    "detail": (
+                                        "Company qualified. Compass ranked the "
+                                        "best decision-maker using title relevance, "
+                                        "source quality, evidence, contactability, "
+                                        "and decision-maker confidence."
+                                    ),
+                                }))
                             history.upsert_master_contact(
                                 contact,
                                 master_prospect_key,
@@ -10615,6 +12505,33 @@ class App(tk.Tk):
                     for key, metric_value in value.items():
                         if key in self.metric_vars:
                             self.metric_vars[key].set(str(metric_value))
+                    if "reviewed" in value:
+                        self._update_funnel(
+                            "reviewed",
+                            int(value["reviewed"]),
+                        )
+                    if "qualified" in value:
+                        self._update_funnel(
+                            "qualified",
+                            int(value["qualified"]),
+                        )
+                    if "contacts" in value:
+                        self._update_funnel(
+                            "contacts",
+                            int(value["contacts"]),
+                        )
+                elif kind == "funnel":
+                    for key, count in value.items():
+                        self._update_funnel(key, int(count))
+                elif kind == "funnel_add":
+                    for key, count in value.items():
+                        self._update_funnel(
+                            key,
+                            int(count),
+                            add=True,
+                        )
+                elif kind == "prospect_preview":
+                    self._set_prospect_preview(value)
                 elif kind == "connected_done":
                     self.progress.stop()
                 elif kind == "done":
