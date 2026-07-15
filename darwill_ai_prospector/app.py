@@ -50,8 +50,13 @@ from .ui.theme import (
     apply_compass_theme,
     workspace_palette,
 )
+from .services.intelligence_store import IntelligenceStore
+from .services.email_intelligence import (
+    build_email_intelligence,
+    format_email_intelligence_report,
+)
 
-APP_TITLE = "Darwill Compass 6.0 — Workspace Foundation"
+APP_TITLE = "Darwill Compass 7.0 — Intelligence Foundation"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -104,7 +109,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "6.0"
+PRODUCT_VERSION = "7.0"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -5319,6 +5324,7 @@ class App(tk.Tk):
         self.darwill_knowledge = load_darwill_knowledge()
         self.review_queue: list[ReviewQueueItem] = load_outreach_queue()
         self.deliverability_rules = load_deliverability_rules()
+        self.intelligence_store = IntelligenceStore(DB_PATH)
         self.hubspot_sequences: list[dict[str, Any]] = []
         self._configure_style()
         self.sidebar_collapsed = False
@@ -5341,6 +5347,7 @@ class App(tk.Tk):
         self._refresh_learning()
         self._refresh_deal_desk()
         self._refresh_master_database()
+        self._refresh_hubspot_workspace()
         self._refresh_hubspot_index()
         self._initialize_permanent_master_csv()
         self.after(100, self._poll)
@@ -5657,7 +5664,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 6.0",
+            text="VERSION 7.0",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -5793,6 +5800,9 @@ class App(tk.Tk):
         deal_desk_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
         deliverability_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
         master_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
+        hubspot_workspace_tab = ttk.Frame(
+            notebook, padding=14, style="Card.TFrame"
+        )
         hubspot_index_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
         history_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
         learning_tab = ttk.Frame(notebook, padding=14, style="Card.TFrame")
@@ -5803,7 +5813,8 @@ class App(tk.Tk):
             (run, "Run Dashboard", "DISCOVERY"),
             (deal_desk_tab, "Deal Desk", "DISCOVERY"),
             (master_tab, "Master Database", "DATA"),
-            (hubspot_index_tab, "HubSpot CSV Index", "DATA"),
+            (hubspot_workspace_tab, "HubSpot Workspace", "CRM"),
+            (hubspot_index_tab, "HubSpot CSV Index", "CRM"),
             (history_tab, "Run History", "DATA"),
             (deliverability_tab, "Deliverability", "INTELLIGENCE"),
             (learning_tab, "Qualification Learning", "INTELLIGENCE"),
@@ -5883,7 +5894,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 6.0",
+            text="Darwill Compass 7.0",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -6018,6 +6029,24 @@ class App(tk.Tk):
         self.hubspot_token = tk.StringVar()
         self.hubspot_sender_email = tk.StringVar()
         self.selected_sequence = tk.StringVar()
+        self.hubspot_connection_status = tk.StringVar(value="Not tested")
+        self.hubspot_workspace_message = tk.StringVar(
+            value="Connect HubSpot, review approved records, then sync explicitly."
+        )
+        self.email_intelligence_vars = {
+            "public_status": tk.StringVar(value="Not evaluated"),
+            "pattern": tk.StringVar(value="—"),
+            "confidence": tk.StringVar(value="—"),
+            "zoominfo": tk.StringVar(value="Unknown"),
+            "recommendation": tk.StringVar(value="Research first"),
+        }
+        self.hubspot_kpi_vars = {
+            "approved": tk.StringVar(value="0"),
+            "ready": tk.StringVar(value="0"),
+            "synced": tk.StringVar(value="0"),
+            "enrolled": tk.StringVar(value="0"),
+            "failed": tk.StringVar(value="0"),
+        }
         self.deal_desk_filter = tk.StringVar(value="All")
         self.minimum_inbox_score = tk.IntVar(
             value=int(self.deliverability_rules.get("minimum_enrollment_score", 82))
@@ -8164,6 +8193,66 @@ class App(tk.Tk):
         )
         self.contact_intelligence_text.pack(fill="both", expand=True)
 
+        email_decision_header = ttk.Frame(
+            acquisition_tab,
+            style="Card.TFrame",
+        )
+        email_decision_header.pack(fill="x", pady=(0, 8))
+        ttk.Label(
+            email_decision_header,
+            text="Email Acquisition Decision",
+            style="SectionTitle.TLabel",
+        ).pack(side="left")
+        ttk.Label(
+            email_decision_header,
+            text=(
+                "Use free/public research first. Recommend a ZoomInfo credit "
+                "only when evidence indicates a verified email is available."
+            ),
+            style="Muted.TLabel",
+        ).pack(side="left", padx=(10, 0))
+
+        email_decision_row = tk.Frame(acquisition_tab, bg=SURFACE)
+        email_decision_row.pack(fill="x", pady=(0, 8))
+        for column, (label, key, background, foreground) in enumerate([
+            ("Public Email", "public_status", "#ECF8F2", SUCCESS),
+            ("Pattern", "pattern", "#EDF5FC", ACCENT),
+            ("Confidence", "confidence", "#FFF4DB", WARNING),
+            ("ZoomInfo", "zoominfo", "#F2EEFA", "#6545A4"),
+            ("Recommendation", "recommendation", "#FDEEEE", ERROR),
+        ]):
+            card = tk.Frame(
+                email_decision_row,
+                bg=background,
+                padx=9,
+                pady=7,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+            )
+            card.grid(
+                row=0,
+                column=column,
+                sticky="nsew",
+                padx=(0 if column == 0 else 4, 0),
+            )
+            tk.Label(
+                card,
+                text=label.upper(),
+                bg=background,
+                fg=MUTED,
+                font=("Segoe UI Semibold", 6),
+            ).pack(anchor="w")
+            tk.Label(
+                card,
+                textvariable=self.email_intelligence_vars[key],
+                bg=background,
+                fg=foreground,
+                font=("Segoe UI Semibold", 10),
+                wraplength=145,
+                justify="left",
+            ).pack(anchor="w", pady=(2, 0))
+            email_decision_row.columnconfigure(column, weight=1)
+
         acquisition_header = ttk.Frame(
             acquisition_tab, style="Card.TFrame"
         )
@@ -8878,6 +8967,209 @@ class App(tk.Tk):
             command=self._update_master_status,
         ).grid(row=1, column=2, rowspan=2, padx=(12, 0))
         master_detail_frame.columnconfigure(1, weight=1)
+
+        hubspot_header = tk.Frame(
+            hubspot_workspace_tab, bg=NAVY, padx=20, pady=14
+        )
+        hubspot_header.pack(fill="x", pady=(0, 12))
+        tk.Label(
+            hubspot_header, text="CRM CONTROL",
+            bg=NAVY, fg="#75B6F5",
+            font=("Segoe UI Semibold", 8),
+        ).pack(anchor="w")
+        tk.Label(
+            hubspot_header, text="HubSpot Workspace",
+            bg=NAVY, fg=WHITE,
+            font=("Segoe UI Semibold", 19),
+        ).pack(anchor="w", pady=(2, 1))
+        tk.Label(
+            hubspot_header,
+            text=(
+                "Connect securely, synchronize reviewed records, and enroll "
+                "only after an explicit final approval."
+            ),
+            bg=NAVY, fg="#CFE3F6",
+            font=("Segoe UI", 9),
+        ).pack(anchor="w")
+
+        hubspot_kpis = tk.Frame(hubspot_workspace_tab, bg=SURFACE)
+        hubspot_kpis.pack(fill="x", pady=(0, 12))
+        for column, (label, key, background, foreground) in enumerate([
+            ("Approved", "approved", "#EAF3FB", ACCENT),
+            ("Ready to Sync", "ready", "#FFF4DB", WARNING),
+            ("Synced", "synced", "#E9F7F0", SUCCESS),
+            ("Enrolled", "enrolled", "#F1ECFB", "#6545A4"),
+            ("Failed", "failed", "#FDEEEE", ERROR),
+        ]):
+            card = tk.Frame(
+                hubspot_kpis, bg=background, padx=12, pady=8,
+                highlightthickness=1, highlightbackground=BORDER,
+            )
+            card.grid(
+                row=0, column=column, sticky="nsew",
+                padx=(0 if column == 0 else 5, 0),
+            )
+            tk.Label(
+                card, textvariable=self.hubspot_kpi_vars[key],
+                bg=background, fg=foreground,
+                font=("Segoe UI Semibold", 17),
+            ).pack(anchor="w")
+            tk.Label(
+                card, text=label, bg=background, fg=TEXT,
+                font=("Segoe UI Semibold", 8),
+            ).pack(anchor="w", pady=(2, 0))
+            hubspot_kpis.columnconfigure(column, weight=1)
+
+        hubspot_body = ttk.Panedwindow(
+            hubspot_workspace_tab, orient="horizontal"
+        )
+        hubspot_body.pack(fill="both", expand=True)
+
+        connection_panel = ttk.LabelFrame(
+            hubspot_body, text="Connection and Sequence", padding=12
+        )
+        records_panel = ttk.LabelFrame(
+            hubspot_body, text="Approved CRM Queue", padding=10
+        )
+        hubspot_body.add(connection_panel, weight=2)
+        hubspot_body.add(records_panel, weight=4)
+
+        self._row(
+            connection_panel, 0, "Private app access token",
+            self.hubspot_token, show="•",
+        )
+        self._row(
+            connection_panel, 1, "Sequence sender email",
+            self.hubspot_sender_email,
+        )
+        ttk.Label(
+            connection_panel, text="Sequence", style="Card.TLabel"
+        ).grid(row=2, column=0, sticky="w", padx=(0, 12), pady=5)
+        self.hubspot_workspace_sequence_combo = ttk.Combobox(
+            connection_panel,
+            textvariable=self.selected_sequence,
+            state="readonly",
+        )
+        self.hubspot_workspace_sequence_combo.grid(
+            row=2, column=1, sticky="ew", pady=5
+        )
+        connection_panel.columnconfigure(1, weight=1)
+
+        status_card = tk.Frame(
+            connection_panel, bg="#F4F8FC", padx=10, pady=9,
+            highlightthickness=1, highlightbackground=BORDER,
+        )
+        status_card.grid(
+            row=3, column=0, columnspan=2, sticky="ew", pady=(10, 8)
+        )
+        tk.Label(
+            status_card, text="CONNECTION STATUS",
+            bg="#F4F8FC", fg=MUTED,
+            font=("Segoe UI Semibold", 7),
+        ).pack(anchor="w")
+        tk.Label(
+            status_card, textvariable=self.hubspot_connection_status,
+            bg="#F4F8FC", fg=NAVY,
+            font=("Segoe UI Semibold", 11),
+        ).pack(anchor="w", pady=(3, 0))
+
+        connection_buttons = ttk.Frame(connection_panel, style="Card.TFrame")
+        connection_buttons.grid(
+            row=4, column=0, columnspan=2, sticky="ew"
+        )
+        ttk.Button(
+            connection_buttons, text="Save Securely",
+            style="Secondary.TButton", command=self._save_credentials,
+        ).pack(side="left")
+        ttk.Button(
+            connection_buttons, text="Test Connection",
+            style="Secondary.TButton", command=self._test_hubspot,
+        ).pack(side="left", padx=(7, 0))
+        ttk.Button(
+            connection_buttons, text="Load Sequences",
+            style="Secondary.TButton",
+            command=self._load_hubspot_sequences,
+        ).pack(side="left", padx=(7, 0))
+
+        safety = tk.Frame(
+            connection_panel, bg="#FFF8E8", padx=10, pady=9,
+            highlightthickness=1, highlightbackground="#EBD59B",
+        )
+        safety.grid(
+            row=5, column=0, columnspan=2, sticky="ew", pady=(12, 0)
+        )
+        tk.Label(
+            safety, text="CONTROL POLICY", bg="#FFF8E8", fg=WARNING,
+            font=("Segoe UI Semibold", 7),
+        ).pack(anchor="w")
+        tk.Label(
+            safety,
+            text=(
+                "Sync creates or reuses company/contact records and adds a "
+                "research note. It does not send email. Enrollment remains "
+                "a separate final-confirmation action."
+            ),
+            bg="#FFF8E8", fg=TEXT, wraplength=390, justify="left",
+            font=("Segoe UI", 8),
+        ).pack(anchor="w", pady=(3, 0))
+
+        records_toolbar = ttk.Frame(records_panel, style="Card.TFrame")
+        records_toolbar.pack(fill="x", pady=(0, 8))
+        ttk.Button(
+            records_toolbar, text="Refresh Queue",
+            style="Secondary.TButton",
+            command=self._refresh_hubspot_workspace,
+        ).pack(side="left")
+        ttk.Button(
+            records_toolbar, text="Sync Selected",
+            style="Primary.TButton",
+            command=self._sync_selected_to_hubspot,
+        ).pack(side="left", padx=(7, 0))
+        ttk.Button(
+            records_toolbar, text="Sync All Approved",
+            style="Primary.TButton",
+            command=self._sync_approved_to_hubspot,
+        ).pack(side="left", padx=(7, 0))
+        ttk.Button(
+            records_toolbar, text="Final Review & Enroll",
+            style="Primary.TButton",
+            command=self._confirm_and_enroll,
+        ).pack(side="right")
+
+        hubspot_tree_frame = ttk.Frame(records_panel, style="Card.TFrame")
+        hubspot_tree_frame.pack(fill="both", expand=True)
+        cols = ("company", "contact", "email", "review", "hubspot", "sequence")
+        self.hubspot_workspace_tree = ttk.Treeview(
+            hubspot_tree_frame, columns=cols, show="headings"
+        )
+        headings = {
+            "company": "Company", "contact": "Contact", "email": "Email",
+            "review": "Review", "hubspot": "HubSpot", "sequence": "Sequence",
+        }
+        widths = {
+            "company": 180, "contact": 190, "email": 210,
+            "review": 95, "hubspot": 105, "sequence": 120,
+        }
+        for name in cols:
+            self.hubspot_workspace_tree.heading(name, text=headings[name])
+            self.hubspot_workspace_tree.column(
+                name, width=widths[name], minwidth=80
+            )
+        configure_scrollable_tree(
+            hubspot_tree_frame, self.hubspot_workspace_tree,
+            horizontal=True, vertical=True, enable_mousewheel=True,
+        )
+
+        message_bar = tk.Frame(
+            hubspot_workspace_tab, bg="#F4F8FC", padx=10, pady=7,
+            highlightthickness=1, highlightbackground=BORDER,
+        )
+        message_bar.pack(fill="x", pady=(10, 0))
+        tk.Label(
+            message_bar, textvariable=self.hubspot_workspace_message,
+            bg="#F4F8FC", fg=TEXT, anchor="w",
+            font=("Segoe UI", 8),
+        ).pack(fill="x")
 
         index_header = ttk.Frame(hubspot_index_tab, style="Card.TFrame")
         index_header.pack(fill="x", pady=(0, 12))
@@ -10458,6 +10750,43 @@ class App(tk.Tk):
         self.contact_intelligence_text.delete("1.0", "end")
         self.contact_intelligence_text.insert("1.0", intelligence)
         self.contact_acquisition_text.delete("1.0", "end")
+        email_intelligence = build_email_intelligence(item)
+        if hasattr(self, "email_intelligence_vars"):
+            self.email_intelligence_vars["public_status"].set(
+                email_intelligence.public_status
+            )
+            self.email_intelligence_vars["pattern"].set(
+                email_intelligence.pattern_label
+            )
+            self.email_intelligence_vars["confidence"].set(
+                f"{email_intelligence.confidence}%"
+            )
+            self.email_intelligence_vars["zoominfo"].set(
+                email_intelligence.zoominfo_status
+            )
+            self.email_intelligence_vars["recommendation"].set(
+                email_intelligence.recommendation
+            )
+
+        try:
+            prospect_key = self.intelligence_store.upsert_queue_item(item)
+            self.intelligence_store.record_standard_evidence(
+                prospect_key, item, email_intelligence
+            )
+            self.intelligence_store.append_timeline(
+                prospect_key,
+                "reviewed_in_deal_desk",
+                "Deal Desk record reviewed",
+                "ui",
+                {
+                    "queue_id": item.queue_id,
+                    "contact_id": item.contact_id,
+                    "status": item.status,
+                },
+            )
+        except Exception:
+            pass
+
         acquisition_report = (
             item.contact_acquisition_report
             or (
@@ -10489,6 +10818,11 @@ class App(tk.Tk):
                 f"Phone status: {phone_status}\n\n"
                 "Important: predicted email addresses are not verified."
             )
+        )
+        acquisition_report = (
+            acquisition_report
+            + "\n\n"
+            + format_email_intelligence_report(email_intelligence)
         )
         self.contact_acquisition_text.insert(
             "1.0",
@@ -10576,6 +10910,10 @@ class App(tk.Tk):
     def _test_hubspot(self):
         try:
             self._hubspot_client().test()
+            self.hubspot_connection_status.set("Connected")
+            self.hubspot_workspace_message.set(
+                "HubSpot connection succeeded. No records were changed."
+            )
             messagebox.showinfo(
                 APP_TITLE,
                 "HubSpot connection succeeded. No records were changed.",
@@ -10606,8 +10944,16 @@ class App(tk.Tk):
                 if sequence_id:
                     labels.append(f"{name} [{sequence_id}]")
             self.sequence_combo["values"] = labels
+            if hasattr(self, "hubspot_workspace_sequence_combo"):
+                self.hubspot_workspace_sequence_combo["values"] = labels
             if labels:
                 self.selected_sequence.set(labels[0])
+            self.hubspot_connection_status.set(
+                f"Connected · {len(labels)} sequence(s) available"
+            )
+            self.hubspot_workspace_message.set(
+                f"Loaded {len(labels)} HubSpot sequence(s)."
+            )
             messagebox.showinfo(
                 APP_TITLE,
                 f"Loaded {len(labels)} HubSpot sequences.",
@@ -10615,6 +10961,129 @@ class App(tk.Tk):
         except Exception as exc:
             messagebox.showerror(
                 APP_TITLE, f"Could not load sequences:\n\n{exc}"
+            )
+
+    def _refresh_hubspot_workspace(self):
+        if not hasattr(self, "hubspot_workspace_tree"):
+            return
+        self.review_queue = load_outreach_queue()
+        tree = self.hubspot_workspace_tree
+        tree.delete(*tree.get_children())
+        counts = {"approved": 0, "ready": 0, "synced": 0, "enrolled": 0, "failed": 0}
+
+        for item in self.review_queue:
+            if item.status == "Approved":
+                counts["approved"] += 1
+            if item.status == "Approved" and item.hubspot_status != "Synced":
+                counts["ready"] += 1
+            if item.hubspot_status == "Synced":
+                counts["synced"] += 1
+            if item.enrollment_status == "Enrolled":
+                counts["enrolled"] += 1
+            if "Failed" in item.hubspot_status or "Failed" in item.enrollment_status:
+                counts["failed"] += 1
+
+            if (
+                item.status != "Approved"
+                and item.hubspot_status != "Synced"
+                and item.enrollment_status != "Enrolled"
+            ):
+                continue
+
+            tree.insert(
+                "", "end", iid=item.queue_id,
+                values=(
+                    item.company_name,
+                    f"{item.contact_name} — {item.contact_title}",
+                    item.contact_email or "Missing",
+                    item.status,
+                    item.hubspot_status,
+                    item.enrollment_status,
+                ),
+            )
+
+        for key, value in counts.items():
+            self.hubspot_kpi_vars[key].set(str(value))
+        self.hubspot_workspace_message.set(
+            f"{counts['ready']} approved record(s) ready to sync; "
+            f"{counts['synced']} synced; {counts['enrolled']} enrolled."
+        )
+
+    def _sync_selected_to_hubspot(self):
+        if not hasattr(self, "hubspot_workspace_tree"):
+            return
+        selected = self.hubspot_workspace_tree.selection()
+        if not selected:
+            messagebox.showinfo(APP_TITLE, "Select a HubSpot Workspace record first.")
+            return
+
+        items = [self._queue_item_by_id(qid) for qid in selected]
+        items = [item for item in items if item]
+        if any(item.status != "Approved" for item in items):
+            messagebox.showwarning(APP_TITLE, "Only approved records can be synchronized.")
+            return
+
+        if not messagebox.askyesno(
+            APP_TITLE,
+            f"Sync {len(items)} selected record(s) to HubSpot?\n\n"
+            "This creates or reuses company/contact records, associates them, "
+            "and adds the approved Compass research as a note.\n\n"
+            "This does not enroll contacts or send email.",
+        ):
+            return
+
+        try:
+            client = self._hubspot_client()
+            failures = []
+            for item in items:
+                if item.hubspot_status == "Synced":
+                    continue
+                try:
+                    client.sync_item(item)
+                    try:
+                        key = self.intelligence_store.upsert_queue_item(item)
+                        self.intelligence_store.append_timeline(
+                            key,
+                            "hubspot_synced",
+                            "Company and contact synchronized to HubSpot",
+                            "hubspot",
+                            {
+                                "hubspot_company_id": item.hubspot_company_id,
+                                "hubspot_contact_id": item.hubspot_contact_id,
+                            },
+                        )
+                    except Exception:
+                        pass
+                    HistoryDB(DB_PATH).update_master_lifecycle(
+                        item.company_id, item.company_website, item.company_name,
+                        "Synced to HubSpot",
+                        hubspot_company_id=item.hubspot_company_id,
+                    )
+                except Exception as exc:
+                    item.hubspot_status = "Sync Failed"
+                    item.reviewer_notes = (
+                        item.reviewer_notes + f" | HubSpot sync error: {exc}"
+                    ).strip(" |")
+                    failures.append(f"{item.company_name}: {exc}")
+
+            save_outreach_queue(self.review_queue)
+            self._refresh_deal_desk()
+            self._refresh_master_database()
+            self._refresh_hubspot_workspace()
+            if failures:
+                messagebox.showwarning(
+                    APP_TITLE,
+                    "Selected sync completed with failures:\n\n"
+                    + "\n".join(failures[:10]),
+                )
+            else:
+                messagebox.showinfo(
+                    APP_TITLE,
+                    "Selected records synchronized. No contacts were enrolled.",
+                )
+        except Exception as exc:
+            messagebox.showerror(
+                APP_TITLE, f"HubSpot synchronization failed:\n\n{exc}"
             )
 
     def _approved_queue_items(self) -> list[ReviewQueueItem]:
@@ -10656,6 +11125,20 @@ class App(tk.Tk):
                     continue
                 try:
                     client.sync_item(item)
+                    try:
+                        key = self.intelligence_store.upsert_queue_item(item)
+                        self.intelligence_store.append_timeline(
+                            key,
+                            "hubspot_synced",
+                            "Company and contact synchronized to HubSpot",
+                            "hubspot",
+                            {
+                                "hubspot_company_id": item.hubspot_company_id,
+                                "hubspot_contact_id": item.hubspot_contact_id,
+                            },
+                        )
+                    except Exception:
+                        pass
                 except Exception as exc:
                     item.hubspot_status = "Sync Failed"
                     item.reviewer_notes = (
@@ -10674,6 +11157,7 @@ class App(tk.Tk):
                     )
             self._refresh_deal_desk()
             self._refresh_master_database()
+            self._refresh_hubspot_workspace()
             if failures:
                 messagebox.showwarning(
                     APP_TITLE,
@@ -10864,6 +11348,7 @@ class App(tk.Tk):
                     )
             self._refresh_deal_desk()
             self._refresh_master_database()
+            self._refresh_hubspot_workspace()
             if failures:
                 messagebox.showwarning(
                     APP_TITLE,
