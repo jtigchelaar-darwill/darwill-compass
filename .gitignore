@@ -15,3 +15,12 @@ run_checkpoint.json
 qualification_learning.json
 outreach_queue.json
 hubspot_exports/
+# Generated databases
+master_csv_backups/
+
+# Future exports
+exports/
+
+# Temporary runtime data
+temp/
+cache/
