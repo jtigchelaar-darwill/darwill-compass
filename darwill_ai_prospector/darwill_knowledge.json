@@ -1,0 +1,26 @@
+{
+  "company_summary": "Darwill is a data-driven marketing partner that helps businesses acquire, retain, reactivate, and grow customer relationships through coordinated direct mail, digital advertising, audience intelligence, analytics, campaign execution, and measurable attribution.",
+  "meeting_cta": "Would you be open to a quick 15-minute conversation so I can show you the opportunity and explain how Darwill could support your growth goals?",
+  "offerings": {
+    "New Movers": {
+      "value_proposition": "Reach households shortly after they move, when they are actively choosing new home-service providers and establishing long-term relationships.",
+      "proof_points": "Automated direct mail and digital touches can be coordinated by territory, with audience counts and measurable campaign reporting."
+    },
+    "Full-Service Marketing Partner": {
+      "value_proposition": "Support customer acquisition across direct mail, digital media, audience targeting, creative production, execution, and measurement.",
+      "proof_points": "Darwill can complement an existing marketing team and fill gaps between strategy, data, production, deployment, and attribution."
+    },
+    "Data & Attribution": {
+      "value_proposition": "Use household and customer data to define audiences, improve targeting, connect campaigns to outcomes, and make marketing performance easier to measure.",
+      "proof_points": "Darwill can support audience modeling, CRM-informed targeting, response tracking, and closed-loop campaign measurement."
+    },
+    "Market Expansion & Brand Awareness": {
+      "value_proposition": "Build awareness quickly in new service areas or recently opened markets using coordinated direct mail, digital advertising, and geographically precise audiences.",
+      "proof_points": "Territory-level targeting helps growing operators introduce the brand to the right households while supporting branch and service-area expansion."
+    },
+    "Retention & Reactivation": {
+      "value_proposition": "Increase repeat business by reactivating past customers, supporting membership programs, and delivering timely cross-sell and lifecycle communications.",
+      "proof_points": "Customer-file segmentation and coordinated outreach can support maintenance plans, seasonal reminders, service reminders, and cross-trade growth."
+    }
+  }
+}

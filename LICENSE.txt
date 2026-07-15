@@ -1,0 +1,4 @@
+Copyright © 2026 Darwill.
+
+Internal-use software. No permission is granted to redistribute, sublicense,
+publish, or sell this software without written authorization.

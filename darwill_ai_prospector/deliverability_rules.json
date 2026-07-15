@@ -1,0 +1,52 @@
+{
+  "minimum_enrollment_score": 82,
+  "maximum_words": 145,
+  "preferred_words": 105,
+  "maximum_links": 1,
+  "maximum_exclamation_marks": 0,
+  "require_company_name": true,
+  "require_contact_first_name": true,
+  "require_single_clear_cta": true,
+  "sender_authentication": {
+    "spf_confirmed": true,
+    "dkim_confirmed": true,
+    "dmarc_confirmed": true
+  },
+  "risky_phrases": [
+    "free",
+    "guaranteed",
+    "limited time",
+    "act now",
+    "click here",
+    "urgent",
+    "buy now",
+    "special promotion",
+    "no obligation",
+    "risk free",
+    "winner",
+    "cash",
+    "lowest price",
+    "100%",
+    "exclusive offer",
+    "once in a lifetime"
+  ],
+  "generic_openers": [
+    "i hope this email finds you well",
+    "i wanted to reach out",
+    "i'm reaching out",
+    "i came across your company",
+    "i was impressed by your company",
+    "quick question"
+  ],
+  "salesy_phrases": [
+    "revolutionize",
+    "game-changing",
+    "best-in-class",
+    "cutting-edge",
+    "unlock your potential",
+    "supercharge",
+    "skyrocket",
+    "transform your business",
+    "industry-leading"
+  ]
+}

@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+settings.json
+prospector.db
+oauth_tokens.enc
+logs/
+output/
+*.xlsx
+.env
+.DS_Store
+Thumbs.db
+search_profiles.json
+run_checkpoint.json
+qualification_learning.json
+outreach_queue.json
+hubspot_exports/

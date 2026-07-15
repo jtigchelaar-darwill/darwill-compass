@@ -1,0 +1,56 @@
+{
+  "HVAC": {
+    "keywords": "HVAC, heating, air conditioning, furnace, heat pump",
+    "naics": [
+      "238220"
+    ]
+  },
+  "Plumbing": {
+    "keywords": "plumbing, plumber, drain, sewer, water heater, repiping",
+    "naics": [
+      "238220"
+    ]
+  },
+  "Electrical": {
+    "keywords": "electrical contractor, electrician, electrical repair, generator installation",
+    "naics": [
+      "238210"
+    ]
+  },
+  "Pest Control": {
+    "keywords": "pest control, exterminator, termite, rodent control",
+    "naics": [
+      "561710"
+    ]
+  },
+  "Pool Service": {
+    "keywords": "pool service, swimming pool maintenance, pool repair, pool cleaning",
+    "naics": [
+      "561790"
+    ]
+  },
+  "Garage Door": {
+    "keywords": "garage door repair, garage door installation, overhead door service",
+    "naics": [
+      "238290"
+    ]
+  },
+  "Solar": {
+    "keywords": "residential solar, solar installation, rooftop solar",
+    "naics": [
+      "238210"
+    ]
+  },
+  "Remodeling": {
+    "keywords": "residential remodeling, home renovation, kitchen remodeling, bathroom remodeling, whole-home remodeling",
+    "naics": [
+      "236118"
+    ]
+  },
+  "Landscaping": {
+    "keywords": "residential landscaping, lawn care, landscape maintenance",
+    "naics": [
+      "561730"
+    ]
+  }
+}
