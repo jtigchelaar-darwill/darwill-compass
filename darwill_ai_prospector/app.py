@@ -43,8 +43,11 @@ from .ui.scrolling import (
     configure_scrollable_text,
     configure_scrollable_tree,
 )
+from .ui.company_intelligence import (
+    build_company_intelligence,
+)
 
-APP_TITLE = "Darwill Compass 4.5.0 — Deal Desk Usability"
+APP_TITLE = "Darwill Compass 5.0 — Deal Desk Workspace"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -97,7 +100,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "4.5.0"
+PRODUCT_VERSION = "5.0"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -5642,7 +5645,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 4.5.0",
+            text="VERSION 5.0",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -5758,7 +5761,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 4.5.0",
+            text="Darwill Compass 5.0",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -7194,8 +7197,8 @@ class App(tk.Tk):
             card = tk.Frame(
                 desk_kpis,
                 bg=background,
-                padx=13,
-                pady=10,
+                padx=11,
+                pady=6,
                 highlightthickness=1,
                 highlightbackground=BORDER,
             )
@@ -7210,7 +7213,7 @@ class App(tk.Tk):
                 textvariable=self.deal_kpi_vars[key],
                 bg=background,
                 fg=foreground,
-                font=("Segoe UI Semibold", 19),
+                font=("Segoe UI Semibold", 15),
             ).pack(anchor="w")
             tk.Label(
                 card,
@@ -7343,197 +7346,244 @@ class App(tk.Tk):
             bg=SURFACE,
             highlightthickness=1,
             highlightbackground=BORDER,
-            padx=14,
-            pady=12,
-        )
-        summary_card.pack(fill="x", pady=(0, 10))
-
-        priority_banner = tk.Frame(
-            summary_card,
-            bg=ACCENT,
-            padx=11,
+            padx=10,
             pady=8,
         )
-        priority_banner.pack(fill="x", pady=(0, 10))
-        tk.Label(
-            priority_banner,
+        summary_card.pack(fill="x")
+
+        summary_top = tk.Frame(summary_card, bg=SURFACE)
+        summary_top.pack(fill="x")
+
+        priority_badge = tk.Label(
+            summary_top,
             textvariable=self.review_outreach_order,
             bg=ACCENT,
             fg=WHITE,
-            font=("Segoe UI Semibold", 12),
-        ).pack(side="left")
-        tk.Label(
-            priority_banner,
-            textvariable=self.review_contact_source,
-            bg=ACCENT,
-            fg="#DCEEFF",
-            font=("Segoe UI", 9),
-        ).pack(side="right")
+            font=("Segoe UI Semibold", 9),
+            padx=10,
+            pady=6,
+        )
+        priority_badge.pack(side="left")
 
-        identity_row = tk.Frame(summary_card, bg=SURFACE)
-        identity_row.pack(fill="x")
-        identity_copy = tk.Frame(identity_row, bg=SURFACE)
-        identity_copy.pack(side="left", fill="x", expand=True)
+        identity_block = tk.Frame(summary_top, bg=SURFACE)
+        identity_block.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=(10, 8),
+        )
         tk.Label(
-            identity_copy,
+            identity_block,
             textvariable=self.review_company,
             bg=SURFACE,
             fg=NAVY,
-            font=("Segoe UI Semibold", 16),
+            font=("Segoe UI Semibold", 14),
         ).pack(anchor="w")
         tk.Label(
-            identity_copy,
+            identity_block,
             textvariable=self.review_contact,
             bg=SURFACE,
             fg=TEXT,
-            font=("Segoe UI Semibold", 10),
-        ).pack(anchor="w", pady=(3, 0))
+            font=("Segoe UI Semibold", 9),
+        ).pack(anchor="w", pady=(1, 0))
         tk.Label(
-            identity_copy,
+            identity_block,
             textvariable=self.review_strategy,
             bg=SURFACE,
             fg=ACCENT,
-            font=("Segoe UI Semibold", 9),
-        ).pack(anchor="w", pady=(5, 0))
+            font=("Segoe UI", 8),
+        ).pack(anchor="w", pady=(1, 0))
         tk.Label(
-            identity_copy,
+            identity_block,
             textvariable=self.review_company_detail,
             bg=SURFACE,
             fg=MUTED,
+            font=("Segoe UI", 8),
             justify="left",
-            wraplength=680,
-            font=("Segoe UI", 9),
-        ).pack(anchor="w", pady=(5, 0))
+            wraplength=560,
+        ).pack(anchor="w", pady=(1, 0))
 
-        confidence_badge = tk.Frame(
-            identity_row,
+        outreach_badge = tk.Frame(
+            summary_top,
             bg=NAVY,
-            padx=13,
-            pady=10,
+            padx=10,
+            pady=6,
         )
-        confidence_badge.pack(side="right", padx=(12, 0))
+        outreach_badge.pack(side="right")
         tk.Label(
-            confidence_badge,
+            outreach_badge,
             text="OUTREACH",
             bg=NAVY,
             fg="#87B7DD",
-            font=("Segoe UI Semibold", 7),
+            font=("Segoe UI Semibold", 6),
         ).pack()
         tk.Label(
-            confidence_badge,
+            outreach_badge,
             textvariable=self.review_metric_vars["outreach"],
             bg=NAVY,
             fg=WHITE,
-            font=("Segoe UI Semibold", 20),
+            font=("Segoe UI Semibold", 17),
         ).pack()
-        tk.Label(
-            confidence_badge,
-            textvariable=self.review_confidence,
-            bg=NAVY,
-            fg="#CFE3F6",
-            wraplength=150,
-            justify="center",
-            font=("Segoe UI", 7),
-        ).pack(pady=(2, 0))
 
-        score_row = tk.Frame(summary_card, bg=SURFACE)
-        score_row.pack(fill="x", pady=(12, 0))
+        compact_scores = tk.Frame(summary_card, bg=SURFACE)
+        compact_scores.pack(fill="x", pady=(7, 0))
         score_specs = [
-            ("Decision Maker", "decision", "#EDF5FC", ACCENT),
-            ("Email Quality", "email", "#ECF8F2", SUCCESS),
-            ("Phone Quality", "phone", "#F4F0FB", "#6545A4"),
-            ("Inbox Ready", "inbox", "#FFF4DB", WARNING),
+            ("Decision", "decision"),
+            ("Email", "email"),
+            ("Phone", "phone"),
+            ("Inbox", "inbox"),
         ]
-        for column, (label, key, background, foreground) in enumerate(
-            score_specs
-        ):
-            score_card = tk.Frame(
-                score_row,
-                bg=background,
-                padx=10,
-                pady=8,
+        for column, (label, key) in enumerate(score_specs):
+            score = tk.Frame(
+                compact_scores,
+                bg="#F4F8FC",
+                padx=8,
+                pady=5,
                 highlightthickness=1,
                 highlightbackground=BORDER,
             )
-            score_card.grid(
+            score.grid(
                 row=0,
                 column=column,
                 sticky="nsew",
-                padx=(0 if column == 0 else 5, 0),
+                padx=(0 if column == 0 else 4, 0),
             )
             tk.Label(
-                score_card,
+                score,
                 text=label.upper(),
-                bg=background,
+                bg="#F4F8FC",
                 fg=MUTED,
-                font=("Segoe UI Semibold", 7),
+                font=("Segoe UI Semibold", 6),
             ).pack(anchor="w")
             tk.Label(
-                score_card,
+                score,
                 textvariable=self.review_metric_vars[key],
-                bg=background,
-                fg=foreground,
-                font=("Segoe UI Semibold", 17),
-            ).pack(anchor="w", pady=(2, 0))
-            score_row.columnconfigure(column, weight=1)
+                bg="#F4F8FC",
+                fg=ACCENT if key != "inbox" else WARNING,
+                font=("Segoe UI Semibold", 12),
+            ).pack(anchor="w")
+            compact_scores.columnconfigure(column, weight=1)
 
-        recommendation_card = tk.Frame(
+        why_row = tk.Frame(
             summary_card,
-            bg="#F4F8FC",
-            padx=11,
-            pady=9,
+            bg="#F8FBFE",
+            padx=8,
+            pady=5,
             highlightthickness=1,
-            highlightbackground="#D8E4EF",
+            highlightbackground="#DFE8F0",
         )
-        recommendation_card.pack(fill="x", pady=(10, 0))
+        why_row.pack(fill="x", pady=(6, 0))
         tk.Label(
-            recommendation_card,
+            why_row,
             text="WHY THIS CONTACT",
-            bg="#F4F8FC",
+            bg="#F8FBFE",
             fg=MUTED,
-            font=("Segoe UI Semibold", 7),
+            font=("Segoe UI Semibold", 6),
         ).pack(anchor="w")
         tk.Label(
-            recommendation_card,
+            why_row,
             textvariable=self.review_recommendation,
-            bg="#F4F8FC",
+            bg="#F8FBFE",
             fg=TEXT,
+            font=("Segoe UI", 8),
             justify="left",
             wraplength=900,
-            font=("Segoe UI", 9),
-        ).pack(anchor="w", pady=(3, 0))
+        ).pack(anchor="w", pady=(2, 0))
 
         review_notebook = ttk.Notebook(review_frame)
-        review_notebook.pack(fill="both", expand=True, pady=(0, 10))
-        email_tab = ttk.Frame(review_notebook, padding=8, style="Card.TFrame")
-        intelligence_tab = ttk.Frame(review_notebook, padding=8, style="Card.TFrame")
-        acquisition_tab = ttk.Frame(review_notebook, padding=8, style="Card.TFrame")
+        review_notebook.pack(
+            fill="both",
+            expand=True,
+            pady=(6, 0),
+        )
+        email_tab = ttk.Frame(review_notebook, padding=6, style="Card.TFrame")
+        company_tab = ttk.Frame(review_notebook, padding=6, style="Card.TFrame")
+        intelligence_tab = ttk.Frame(review_notebook, padding=6, style="Card.TFrame")
+        acquisition_tab = ttk.Frame(review_notebook, padding=6, style="Card.TFrame")
         review_notebook.add(email_tab, text="1. Email Review")
         review_notebook.add(
-            intelligence_tab, text="2. Contact Intelligence"
+            company_tab, text="2. Company Intelligence"
         )
         review_notebook.add(
-            acquisition_tab, text="3. Contact Acquisition Report"
+            intelligence_tab, text="3. Contact Intelligence"
+        )
+        review_notebook.add(
+            acquisition_tab, text="4. Contact Acquisition Report"
         )
         self.review_notebook = review_notebook
+        self.company_tab = company_tab
         self.intelligence_tab = intelligence_tab
         self.acquisition_tab = acquisition_tab
 
-        ttk.Label(email_tab, text="Approved Subject", style="Card.TLabel").pack(anchor="w")
-        ttk.Entry(email_tab, textvariable=self.review_subject).pack(fill="x", pady=(4, 10))
-        ttk.Label(email_tab, text="Approved Email Body", style="Card.TLabel").pack(anchor="w")
+        email_tab.columnconfigure(0, weight=1)
+        email_tab.rowconfigure(3, weight=1)
+
+        email_header = ttk.Frame(
+            email_tab,
+            style="Card.TFrame",
+        )
+        email_header.grid(
+            row=0,
+            column=0,
+            sticky="ew",
+            pady=(0, 6),
+        )
+        ttk.Label(
+            email_header,
+            text="Approved Email",
+            style="SectionTitle.TLabel",
+        ).pack(side="left")
+        ttk.Label(
+            email_header,
+            text="Review the complete message before approval or sync.",
+            style="Muted.TLabel",
+        ).pack(side="left", padx=(10, 0))
+
+        subject_frame = ttk.Frame(
+            email_tab,
+            style="Card.TFrame",
+        )
+        subject_frame.grid(
+            row=1,
+            column=0,
+            sticky="ew",
+            pady=(0, 6),
+        )
+        subject_frame.columnconfigure(0, weight=1)
+        ttk.Label(
+            subject_frame,
+            text="Approved Subject",
+            style="Card.TLabel",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 3))
+        ttk.Entry(
+            subject_frame,
+            textvariable=self.review_subject,
+        ).grid(row=1, column=0, sticky="ew")
+
+        ttk.Label(
+            email_tab,
+            text="Approved Email Body",
+            style="Card.TLabel",
+        ).grid(
+            row=2,
+            column=0,
+            sticky="w",
+            pady=(0, 3),
+        )
+
         email_body_frame = ttk.Frame(
             email_tab,
             style="Card.TFrame",
         )
-        email_body_frame.pack(
-            fill="both",
-            expand=True,
-            pady=(4, 10),
+        email_body_frame.grid(
+            row=3,
+            column=0,
+            sticky="nsew",
         )
         self.review_email_body = tk.Text(
             email_body_frame,
-            height=14,
+            height=20,
+            width=90,
             wrap="word",
             bg=WHITE,
             fg=TEXT,
@@ -7542,6 +7592,8 @@ class App(tk.Tk):
             highlightthickness=0,
             font=("Segoe UI", 10),
             undo=True,
+            padx=14,
+            pady=12,
         )
         configure_scrollable_text(
             email_body_frame,
@@ -7550,9 +7602,267 @@ class App(tk.Tk):
             vertical=True,
             enable_mousewheel=True,
         )
-        ttk.Label(email_tab, text="Reviewer Notes", style="Card.TLabel").pack(anchor="w")
-        ttk.Entry(email_tab, textvariable=self.review_notes).pack(fill="x", pady=(4, 0))
 
+        notes_frame = ttk.Frame(
+            email_tab,
+            style="Card.TFrame",
+        )
+        notes_frame.grid(
+            row=4,
+            column=0,
+            sticky="ew",
+            pady=(7, 0),
+        )
+        notes_frame.columnconfigure(0, weight=1)
+        ttk.Label(
+            notes_frame,
+            text="Reviewer Notes",
+            style="Card.TLabel",
+        ).grid(row=0, column=0, sticky="w", pady=(0, 3))
+        ttk.Entry(
+            notes_frame,
+            textvariable=self.review_notes,
+        ).grid(row=1, column=0, sticky="ew")
+
+        company_header = ttk.Frame(
+            company_tab,
+            style="Card.TFrame",
+        )
+        company_header.pack(fill="x", pady=(0, 8))
+        ttk.Label(
+            company_header,
+            text="Company Intelligence",
+            style="SectionTitle.TLabel",
+        ).pack(side="left")
+        ttk.Label(
+            company_header,
+            text=(
+                "Qualification evidence, residential fit, company size, "
+                "growth signals, technology, and the Darwill opportunity."
+            ),
+            style="Muted.TLabel",
+        ).pack(side="left", padx=(10, 0))
+
+        self.company_intelligence_vars = {
+            "qualification": tk.StringVar(value="—"),
+            "residential": tk.StringVar(value="—"),
+            "size": tk.StringVar(value="—"),
+            "opportunity": tk.StringVar(value="—"),
+            "location": tk.StringVar(value="—"),
+            "website": tk.StringVar(value="—"),
+            "growth": tk.StringVar(value="No stored growth signal"),
+            "technology": tk.StringVar(value="No stored technology signal"),
+            "service_area": tk.StringVar(value="No stored service-area evidence"),
+            "darwill_angle": tk.StringVar(
+                value="Select a company to calculate the recommended Darwill angle."
+            ),
+        }
+
+        company_score_row = tk.Frame(company_tab, bg=SURFACE)
+        company_score_row.pack(fill="x", pady=(0, 8))
+        company_score_specs = [
+            ("Qualification Evidence", "qualification", "#EDF5FC", ACCENT),
+            ("Residential Confidence", "residential", "#ECF8F2", SUCCESS),
+            ("Company Size", "size", "#F4F0FB", "#6545A4"),
+            ("Darwill Opportunity", "opportunity", "#FFF4DB", WARNING),
+        ]
+        for column, (label, key, background, foreground) in enumerate(
+            company_score_specs
+        ):
+            card = tk.Frame(
+                company_score_row,
+                bg=background,
+                padx=10,
+                pady=8,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+            )
+            card.grid(
+                row=0,
+                column=column,
+                sticky="nsew",
+                padx=(0 if column == 0 else 5, 0),
+            )
+            tk.Label(
+                card,
+                text=label.upper(),
+                bg=background,
+                fg=MUTED,
+                font=("Segoe UI Semibold", 7),
+            ).pack(anchor="w")
+            tk.Label(
+                card,
+                textvariable=self.company_intelligence_vars[key],
+                bg=background,
+                fg=foreground,
+                font=("Segoe UI Semibold", 16),
+                wraplength=175,
+                justify="left",
+            ).pack(anchor="w", pady=(2, 0))
+            company_score_row.columnconfigure(column, weight=1)
+
+        company_facts = tk.Frame(company_tab, bg=SURFACE)
+        company_facts.pack(fill="x", pady=(0, 8))
+        fact_specs = [
+            ("LOCATION", "location"),
+            ("WEBSITE", "website"),
+            ("SERVICE AREA", "service_area"),
+        ]
+        for column, (label, key) in enumerate(fact_specs):
+            card = tk.Frame(
+                company_facts,
+                bg="#F4F8FC",
+                padx=10,
+                pady=8,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+            )
+            card.grid(
+                row=0,
+                column=column,
+                sticky="nsew",
+                padx=(0 if column == 0 else 5, 0),
+            )
+            tk.Label(
+                card,
+                text=label,
+                bg="#F4F8FC",
+                fg=MUTED,
+                font=("Segoe UI Semibold", 7),
+            ).pack(anchor="w")
+            tk.Label(
+                card,
+                textvariable=self.company_intelligence_vars[key],
+                bg="#F4F8FC",
+                fg=TEXT,
+                font=("Segoe UI", 9),
+                wraplength=265,
+                justify="left",
+            ).pack(anchor="w", pady=(3, 0))
+            company_facts.columnconfigure(column, weight=1)
+
+        signal_row = tk.Frame(company_tab, bg=SURFACE)
+        signal_row.pack(fill="x", pady=(0, 8))
+        growth_card = tk.Frame(
+            signal_row,
+            bg="#ECF8F2",
+            padx=11,
+            pady=8,
+            highlightthickness=1,
+            highlightbackground="#CBE8D9",
+        )
+        growth_card.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(0, 4),
+        )
+        tk.Label(
+            growth_card,
+            text="GROWTH & MARKETING SIGNALS",
+            bg="#ECF8F2",
+            fg=SUCCESS,
+            font=("Segoe UI Semibold", 7),
+        ).pack(anchor="w")
+        tk.Label(
+            growth_card,
+            textvariable=self.company_intelligence_vars["growth"],
+            bg="#ECF8F2",
+            fg=TEXT,
+            font=("Segoe UI", 9),
+            wraplength=420,
+            justify="left",
+        ).pack(anchor="w", pady=(3, 0))
+
+        tech_card = tk.Frame(
+            signal_row,
+            bg="#F2EEFA",
+            padx=11,
+            pady=8,
+            highlightthickness=1,
+            highlightbackground="#DCCFF1",
+        )
+        tech_card.pack(
+            side="left",
+            fill="both",
+            expand=True,
+            padx=(4, 0),
+        )
+        tk.Label(
+            tech_card,
+            text="TECHNOLOGY SIGNALS",
+            bg="#F2EEFA",
+            fg="#6545A4",
+            font=("Segoe UI Semibold", 7),
+        ).pack(anchor="w")
+        tk.Label(
+            tech_card,
+            textvariable=self.company_intelligence_vars["technology"],
+            bg="#F2EEFA",
+            fg=TEXT,
+            font=("Segoe UI", 9),
+            wraplength=420,
+            justify="left",
+        ).pack(anchor="w", pady=(3, 0))
+
+        darwill_card = tk.Frame(
+            company_tab,
+            bg=NAVY,
+            padx=12,
+            pady=10,
+        )
+        darwill_card.pack(fill="x", pady=(0, 8))
+        tk.Label(
+            darwill_card,
+            text="RECOMMENDED DARWILL ANGLE",
+            bg=NAVY,
+            fg="#75B6F5",
+            font=("Segoe UI Semibold", 7),
+        ).pack(anchor="w")
+        tk.Label(
+            darwill_card,
+            textvariable=self.company_intelligence_vars["darwill_angle"],
+            bg=NAVY,
+            fg=WHITE,
+            font=("Segoe UI", 9),
+            wraplength=900,
+            justify="left",
+        ).pack(anchor="w", pady=(3, 0))
+
+        evidence_frame = ttk.Frame(
+            company_tab,
+            style="Card.TFrame",
+        )
+        evidence_frame.pack(fill="both", expand=True)
+        ttk.Label(
+            evidence_frame,
+            text="Why Qualified / Stored Evidence",
+            style="Card.TLabel",
+        ).pack(anchor="w", pady=(0, 4))
+        evidence_text_frame = ttk.Frame(
+            evidence_frame,
+            style="Card.TFrame",
+        )
+        evidence_text_frame.pack(fill="both", expand=True)
+        self.company_intelligence_text = tk.Text(
+            evidence_text_frame,
+            wrap="word",
+            bg=SURFACE_ALT,
+            fg=TEXT,
+            relief="solid",
+            bd=1,
+            font=("Segoe UI", 10),
+            padx=12,
+            pady=10,
+            height=10,
+        )
+        configure_scrollable_text(
+            evidence_text_frame,
+            self.company_intelligence_text,
+            horizontal=False,
+            vertical=True,
+            enable_mousewheel=True,
+        )
         intelligence_header = ttk.Frame(
             intelligence_tab,
             style="Card.TFrame",
@@ -9681,7 +9991,7 @@ class App(tk.Tk):
         try:
             width = pane.winfo_width()
             if width > 400:
-                pane.sashpos(0, max(360, int(width * 0.43)))
+                pane.sashpos(0, max(500, int(width * 0.48)))
         except (tk.TclError, IndexError):
             pass
 
@@ -9926,6 +10236,20 @@ class App(tk.Tk):
             )
             or "Company size and location were not stored."
         )
+        company_intelligence = build_company_intelligence(item)
+        if hasattr(self, "company_intelligence_vars"):
+            for key, value in company_intelligence.items():
+                if key in self.company_intelligence_vars:
+                    self.company_intelligence_vars[key].set(str(value))
+        if hasattr(self, "company_intelligence_text"):
+            self.company_intelligence_text.configure(state="normal")
+            self.company_intelligence_text.delete("1.0", "end")
+            self.company_intelligence_text.insert(
+                "1.0",
+                company_intelligence.get("evidence_text", ""),
+            )
+            self.company_intelligence_text.configure(state="disabled")
+
         self.review_recommendation.set(recommendation_reason)
         self.review_email_detail.set(
             (
