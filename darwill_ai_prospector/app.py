@@ -39,7 +39,12 @@ from pypdf import PdfReader
 import dns.resolver
 from cryptography.fernet import Fernet, InvalidToken
 
-APP_TITLE = "Darwill Compass 4.4 — Proven 3.6 Engine"
+from .ui.scrolling import (
+    configure_scrollable_text,
+    configure_scrollable_tree,
+)
+
+APP_TITLE = "Darwill Compass 4.5.0 — Deal Desk Usability"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -92,7 +97,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "4.4"
+PRODUCT_VERSION = "4.5.0"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -5637,7 +5642,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 4.4",
+            text="VERSION 4.5.0",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -5753,7 +5758,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 4.4",
+            text="Darwill Compass 4.5.0",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -7229,6 +7234,10 @@ class App(tk.Tk):
         )
         desk_pane.add(queue_frame, weight=3)
         desk_pane.add(review_frame, weight=4)
+        self.after(
+            250,
+            lambda: self._set_initial_deal_desk_split(desk_pane),
+        )
 
         queue_columns = (
             "order", "status", "company", "contact", "strategy",
@@ -7256,12 +7265,13 @@ class App(tk.Tk):
         for name in queue_columns:
             self.deal_tree.heading(name, text=queue_headings[name])
             self.deal_tree.column(name, width=widths[name], stretch=True)
-        desk_scroll = ttk.Scrollbar(
-            queue_frame, command=self.deal_tree.yview
+        configure_scrollable_tree(
+            queue_frame,
+            self.deal_tree,
+            horizontal=True,
+            vertical=True,
+            enable_mousewheel=True,
         )
-        self.deal_tree.configure(yscrollcommand=desk_scroll.set)
-        self.deal_tree.pack(side="left", fill="both", expand=True)
-        desk_scroll.pack(side="right", fill="y")
         self.deal_tree.bind(
             "<<TreeviewSelect>>",
             lambda _event: self._load_selected_queue_item(),
@@ -7512,11 +7522,34 @@ class App(tk.Tk):
         ttk.Label(email_tab, text="Approved Subject", style="Card.TLabel").pack(anchor="w")
         ttk.Entry(email_tab, textvariable=self.review_subject).pack(fill="x", pady=(4, 10))
         ttk.Label(email_tab, text="Approved Email Body", style="Card.TLabel").pack(anchor="w")
-        self.review_email_body = tk.Text(
-            email_tab, height=14, wrap="word", bg=WHITE, fg=TEXT,
-            relief="solid", bd=1, highlightthickness=0, font=("Segoe UI", 10)
+        email_body_frame = ttk.Frame(
+            email_tab,
+            style="Card.TFrame",
         )
-        self.review_email_body.pack(fill="both", expand=True, pady=(4, 10))
+        email_body_frame.pack(
+            fill="both",
+            expand=True,
+            pady=(4, 10),
+        )
+        self.review_email_body = tk.Text(
+            email_body_frame,
+            height=14,
+            wrap="word",
+            bg=WHITE,
+            fg=TEXT,
+            relief="solid",
+            bd=1,
+            highlightthickness=0,
+            font=("Segoe UI", 10),
+            undo=True,
+        )
+        configure_scrollable_text(
+            email_body_frame,
+            self.review_email_body,
+            horizontal=False,
+            vertical=True,
+            enable_mousewheel=True,
+        )
         ttk.Label(email_tab, text="Reviewer Notes", style="Card.TLabel").pack(anchor="w")
         ttk.Entry(email_tab, textvariable=self.review_notes).pack(fill="x", pady=(4, 0))
 
@@ -9642,6 +9675,15 @@ class App(tk.Tk):
             (item for item in self.review_queue if item.queue_id == queue_id),
             None,
         )
+
+    def _set_initial_deal_desk_split(self, pane):
+        """Set a practical first-open split without blocking user resizing."""
+        try:
+            width = pane.winfo_width()
+            if width > 400:
+                pane.sashpos(0, max(360, int(width * 0.43)))
+        except (tk.TclError, IndexError):
+            pass
 
     def _refresh_deal_desk(self):
         if not hasattr(self, "deal_tree"):
