@@ -75,7 +75,7 @@ from .services.email_intelligence import (
     format_email_intelligence_report,
 )
 
-APP_TITLE = "Darwill Compass 8.4 — Scrollable Deal Desk"
+APP_TITLE = "Darwill Compass 8.5 — Executive Summary"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -128,7 +128,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "8.4"
+PRODUCT_VERSION = "8.5"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -5602,6 +5602,9 @@ class App(tk.Tk):
             "confidence": tk.StringVar(value="—"),
             "email_status": tk.StringVar(value="Not evaluated"),
             "next_action": tk.StringVar(value="Review company"),
+            "executive_summary": tk.StringVar(
+                value="Select a company to generate an executive summary."
+            ),
         }
         self._build()
         self._load_settings()
@@ -5933,7 +5936,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 8.4",
+            text="VERSION 8.5",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -6163,7 +6166,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 8.4",
+            text="Darwill Compass 8.5",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -8003,15 +8006,24 @@ class App(tk.Tk):
             fg=MUTED,
             font=("Segoe UI Semibold", 6),
         ).pack(anchor="w")
-        tk.Label(
+        why_contact_value = tk.Label(
             why_row,
             textvariable=self.review_recommendation,
             bg="#F8FBFE",
             fg=TEXT,
             font=("Segoe UI", 8),
             justify="left",
-            wraplength=900,
-        ).pack(anchor="w", pady=(2, 0))
+            anchor="w",
+            wraplength=500,
+        )
+        why_contact_value.pack(fill="x", anchor="w", pady=(2, 0))
+
+        def resize_why_contact(event):
+            why_contact_value.configure(
+                wraplength=max(180, event.width - 18)
+            )
+
+        why_row.bind("<Configure>", resize_why_contact, add="+")
 
         review_notebook = ttk.Notebook(review_frame)
         review_notebook.pack(
@@ -8124,12 +8136,14 @@ class App(tk.Tk):
             email_header,
             text="Approved Email",
             style="SectionTitle.TLabel",
-        ).pack(side="left")
+        ).pack(anchor="w")
         ttk.Label(
             email_header,
             text="Review the complete message before approval or sync.",
             style="Muted.TLabel",
-        ).pack(side="left", padx=(10, 0))
+            wraplength=620,
+            justify="left",
+        ).pack(fill="x", anchor="w", pady=(2, 0))
 
         subject_frame = ttk.Frame(
             email_tab,
@@ -8225,15 +8239,25 @@ class App(tk.Tk):
             company_header,
             text="Company Intelligence",
             style="SectionTitle.TLabel",
-        ).pack(side="left")
-        ttk.Label(
+        ).pack(anchor="w")
+        company_header_description = ttk.Label(
             company_header,
             text=(
                 "Qualification evidence, residential fit, company size, "
                 "growth signals, technology, and the Darwill opportunity."
             ),
             style="Muted.TLabel",
-        ).pack(side="left", padx=(10, 0))
+            wraplength=600,
+            justify="left",
+        )
+        company_header_description.pack(fill="x", anchor="w", pady=(2, 0))
+        company_header.bind(
+            "<Configure>",
+            lambda event: company_header_description.configure(
+                wraplength=max(220, event.width - 12)
+            ),
+            add="+",
+        )
 
         self.company_intelligence_vars.update({
             "qualification": tk.StringVar(value="—"),
@@ -8249,6 +8273,50 @@ class App(tk.Tk):
                 value="Select a company to calculate the recommended Darwill angle."
             ),
         })
+
+        executive_summary_card = tk.Frame(
+            company_tab,
+            bg="#F4F8FC",
+            padx=12,
+            pady=10,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+        )
+        executive_summary_card.pack(fill="x", pady=(0, 10))
+
+        tk.Label(
+            executive_summary_card,
+            text="EXECUTIVE SUMMARY",
+            bg="#F4F8FC",
+            fg=ACCENT,
+            font=("Segoe UI Semibold", 8),
+        ).pack(anchor="w")
+
+        executive_summary_value = tk.Label(
+            executive_summary_card,
+            textvariable=self.company_intelligence_vars[
+                "executive_summary"
+            ],
+            bg="#F4F8FC",
+            fg=TEXT,
+            font=("Segoe UI", 10),
+            justify="left",
+            anchor="nw",
+            wraplength=580,
+        )
+        executive_summary_value.pack(
+            fill="x",
+            anchor="w",
+            pady=(4, 0),
+        )
+
+        executive_summary_card.bind(
+            "<Configure>",
+            lambda event: executive_summary_value.configure(
+                wraplength=max(240, event.width - 24)
+            ),
+            add="+",
+        )
 
         company_score_row = tk.Frame(company_tab, bg=SURFACE)
         company_score_row.pack(fill="x", pady=(0, 8))
@@ -8275,22 +8343,39 @@ class App(tk.Tk):
                 sticky="nsew",
                 padx=(0 if column == 0 else 5, 0),
             )
-            tk.Label(
+            score_heading = tk.Label(
                 card,
                 text=label.upper(),
                 bg=background,
                 fg=MUTED,
                 font=("Segoe UI Semibold", 7),
-            ).pack(anchor="w")
-            tk.Label(
+                justify="left",
+                anchor="w",
+                wraplength=145,
+            )
+            score_heading.pack(fill="x", anchor="w")
+            score_value = tk.Label(
                 card,
                 textvariable=self.company_intelligence_vars[key],
                 bg=background,
                 fg=foreground,
-                font=("Segoe UI Semibold", 16),
-                wraplength=175,
+                font=("Segoe UI Semibold", 15),
+                wraplength=145,
                 justify="left",
-            ).pack(anchor="w", pady=(2, 0))
+                anchor="w",
+            )
+            score_value.pack(fill="x", anchor="w", pady=(2, 0))
+
+            def resize_company_score(
+                event,
+                heading=score_heading,
+                value=score_value,
+            ):
+                available = max(90, event.width - 20)
+                heading.configure(wraplength=available)
+                value.configure(wraplength=available)
+
+            card.bind("<Configure>", resize_company_score, add="+")
             company_score_row.columnconfigure(column, weight=1)
 
         company_facts = tk.Frame(company_tab, bg=SURFACE)
@@ -8322,15 +8407,24 @@ class App(tk.Tk):
                 fg=MUTED,
                 font=("Segoe UI Semibold", 7),
             ).pack(anchor="w")
-            tk.Label(
+            fact_value = tk.Label(
                 card,
                 textvariable=self.company_intelligence_vars[key],
                 bg="#F4F8FC",
                 fg=TEXT,
                 font=("Segoe UI", 9),
-                wraplength=265,
+                wraplength=190,
                 justify="left",
-            ).pack(anchor="w", pady=(3, 0))
+                anchor="w",
+            )
+            fact_value.pack(fill="x", anchor="w", pady=(3, 0))
+            card.bind(
+                "<Configure>",
+                lambda event, widget=fact_value: widget.configure(
+                    wraplength=max(100, event.width - 20)
+                ),
+                add="+",
+            )
             company_facts.columnconfigure(column, weight=1)
 
         signal_row = tk.Frame(company_tab, bg=SURFACE)
@@ -8411,15 +8505,32 @@ class App(tk.Tk):
             fg="#75B6F5",
             font=("Segoe UI Semibold", 7),
         ).pack(anchor="w")
-        tk.Label(
+        darwill_angle_value = tk.Label(
             darwill_card,
             textvariable=self.company_intelligence_vars["darwill_angle"],
             bg=NAVY,
             fg=WHITE,
             font=("Segoe UI", 9),
-            wraplength=900,
             justify="left",
-        ).pack(anchor="w", pady=(3, 0))
+            anchor="nw",
+            wraplength=520,
+        )
+        darwill_angle_value.pack(
+            fill="x",
+            anchor="w",
+            pady=(4, 2),
+        )
+
+        def resize_darwill_angle(event):
+            darwill_angle_value.configure(
+                wraplength=max(220, event.width - 24)
+            )
+
+        darwill_card.bind(
+            "<Configure>",
+            resize_darwill_angle,
+            add="+",
+        )
 
         evidence_frame = ttk.Frame(
             company_tab,
@@ -8428,7 +8539,7 @@ class App(tk.Tk):
         evidence_frame.pack(fill="both", expand=True)
         ttk.Label(
             evidence_frame,
-            text="Why Qualified / Stored Evidence",
+            text="Supporting Evidence and Research",
             style="Card.TLabel",
         ).pack(anchor="w", pady=(0, 4))
         evidence_text_frame = ttk.Frame(
@@ -8464,15 +8575,25 @@ class App(tk.Tk):
             intelligence_header,
             text="Contact Intelligence",
             style="SectionTitle.TLabel",
-        ).pack(side="left")
-        ttk.Label(
+        ).pack(anchor="w")
+        contact_header_description = ttk.Label(
             intelligence_header,
             text=(
                 "Ranking rationale, contactability, verification, and "
                 "recommended outreach order."
             ),
             style="Muted.TLabel",
-        ).pack(side="left", padx=(10, 0))
+            wraplength=600,
+            justify="left",
+        )
+        contact_header_description.pack(fill="x", anchor="w", pady=(2, 0))
+        intelligence_header.bind(
+            "<Configure>",
+            lambda event: contact_header_description.configure(
+                wraplength=max(220, event.width - 12)
+            ),
+            add="+",
+        )
 
         intelligence_score_row = tk.Frame(
             intelligence_tab,
@@ -8630,6 +8751,9 @@ class App(tk.Tk):
             "confidence": "—",
             "email_status": "Not evaluated",
             "next_action": "Review company",
+            "executive_summary": (
+                "Select a company to generate an executive summary."
+            ),
         }
         for variable_key, default_value in (
             required_company_intelligence_keys.items()
@@ -8648,15 +8772,25 @@ class App(tk.Tk):
             company_intelligence_header,
             text="Company Intelligence Decision",
             style="SectionTitle.TLabel",
-        ).pack(side="left")
-        ttk.Label(
+        ).pack(anchor="w")
+        company_decision_description = ttk.Label(
             company_intelligence_header,
             text=(
                 "Explainable company fit, risk, email state, and recommended "
                 "next action from stored research."
             ),
             style="Muted.TLabel",
-        ).pack(side="left", padx=(10, 0))
+            wraplength=600,
+            justify="left",
+        )
+        company_decision_description.pack(fill="x", anchor="w", pady=(2, 0))
+        company_intelligence_header.bind(
+            "<Configure>",
+            lambda event: company_decision_description.configure(
+                wraplength=max(220, event.width - 12)
+            ),
+            add="+",
+        )
 
         company_decision_row = tk.Frame(acquisition_tab, bg=SURFACE)
         company_decision_row.pack(fill="x", pady=(0, 8))
@@ -8707,15 +8841,25 @@ class App(tk.Tk):
             email_decision_header,
             text="Email Acquisition Decision",
             style="SectionTitle.TLabel",
-        ).pack(side="left")
-        ttk.Label(
+        ).pack(anchor="w")
+        email_decision_description = ttk.Label(
             email_decision_header,
             text=(
                 "Use free/public research first. Recommend a ZoomInfo credit "
                 "only when evidence indicates a verified email is available."
             ),
             style="Muted.TLabel",
-        ).pack(side="left", padx=(10, 0))
+            wraplength=600,
+            justify="left",
+        )
+        email_decision_description.pack(fill="x", anchor="w", pady=(2, 0))
+        email_decision_header.bind(
+            "<Configure>",
+            lambda event: email_decision_description.configure(
+                wraplength=max(220, event.width - 12)
+            ),
+            add="+",
+        )
 
         email_decision_row = tk.Frame(acquisition_tab, bg=SURFACE)
         email_decision_row.pack(fill="x", pady=(0, 8))
@@ -8759,34 +8903,68 @@ class App(tk.Tk):
             email_decision_row.columnconfigure(column, weight=1)
 
         acquisition_header = ttk.Frame(
-            acquisition_tab, style="Card.TFrame"
+            acquisition_tab,
+            style="Card.TFrame",
         )
         acquisition_header.pack(fill="x", pady=(0, 8))
-        ttk.Label(
+        acquisition_header.columnconfigure(0, weight=1)
+
+        acquisition_title_area = ttk.Frame(
             acquisition_header,
+            style="Card.TFrame",
+        )
+        acquisition_title_area.grid(
+            row=0,
+            column=0,
+            sticky="ew",
+            padx=(0, 8),
+        )
+        ttk.Label(
+            acquisition_title_area,
             text="Contact Acquisition Report",
             style="SectionTitle.TLabel",
-        ).pack(side="left")
-        ttk.Label(
-            acquisition_header,
+        ).pack(anchor="w")
+        acquisition_header_description = ttk.Label(
+            acquisition_title_area,
             text=(
                 "Source trail for the person, email, phone, "
                 "and any predicted address."
             ),
             style="Muted.TLabel",
-        ).pack(side="left", padx=(10, 0))
-        ttk.Button(
+            wraplength=420,
+            justify="left",
+        )
+        acquisition_header_description.pack(
+            fill="x",
+            anchor="w",
+            pady=(2, 0),
+        )
+
+        acquisition_actions = ttk.Frame(
             acquisition_header,
+            style="Card.TFrame",
+        )
+        acquisition_actions.grid(row=0, column=1, sticky="ne")
+        ttk.Button(
+            acquisition_actions,
             text="Retry ZoomInfo Email",
             command=self._retry_selected_contact_enrichment,
             style="Primary.TButton",
-        ).pack(side="right")
+        ).pack(side="left")
         ttk.Button(
-            acquisition_header,
+            acquisition_actions,
             text="MCP Explorer",
             command=self._open_mcp_explorer,
             style="Secondary.TButton",
-        ).pack(side="right", padx=(0, 8))
+        ).pack(side="left", padx=(8, 0))
+
+        acquisition_title_area.bind(
+            "<Configure>",
+            lambda event: acquisition_header_description.configure(
+                wraplength=max(180, event.width - 8)
+            ),
+            add="+",
+        )
 
         acquisition_report_frame = ttk.Frame(
             acquisition_tab,
@@ -11208,18 +11386,9 @@ class App(tk.Tk):
         if hasattr(self, "company_intelligence_text"):
             self.company_intelligence_text.configure(state="normal")
             self.company_intelligence_text.delete("1.0", "end")
-            executive_header = (
-                "EXECUTIVE BRIEF\n"
-                f"Fit: {company_brief.fit_summary}\n"
-                f"Confidence: {company_brief.confidence}%\n"
-                f"Risk: {company_brief.risk_assessment}\n"
-                f"Opportunity: {company_brief.opportunity_assessment}\n"
-                f"Recommended pitch: {company_brief.recommended_angle}\n\n"
-            )
             self.company_intelligence_text.insert(
                 "1.0",
-                executive_header
-                + company_presentation.get("evidence_text", ""),
+                company_presentation.get("evidence_text", ""),
             )
             self.company_intelligence_text.configure(state="disabled")
 
@@ -11302,6 +11471,21 @@ class App(tk.Tk):
             )
             self.company_intelligence_vars["next_action"].set(
                 email_resolution.recommended_action
+            )
+            executive_summary_text = (
+                f"{company_brief.company_name} "
+                f"{company_brief.fit_summary.lower()} "
+                f"{company_brief.residential_assessment} "
+                f"{company_brief.scale_assessment} "
+                f"{company_brief.growth_assessment} "
+                f"Primary opportunity: "
+                f"{company_brief.opportunity_assessment} "
+                f"Recommended approach: "
+                f"{company_brief.recommended_angle} "
+                f"Main risk: {company_brief.risk_assessment}"
+            )
+            self.company_intelligence_vars["executive_summary"].set(
+                executive_summary_text
             )
 
         email_intelligence = build_email_intelligence(item)
