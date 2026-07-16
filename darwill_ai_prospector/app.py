@@ -40,11 +40,12 @@ import dns.resolver
 from cryptography.fernet import Fernet, InvalidToken
 
 from .ui.scrolling import (
+    VerticalScrolledFrame,
     configure_scrollable_text,
     configure_scrollable_tree,
 )
 from .ui.company_intelligence import (
-    build_company_intelligence,
+    build_company_intelligence as build_company_presentation,
 )
 from .ui.theme import (
     apply_compass_theme,
@@ -64,7 +65,7 @@ from .services.zoominfo_adapter import (
     ZoomInfoAdapterError,
 )
 from .services.company_intelligence import (
-    build_company_intelligence,
+    build_company_intelligence as build_company_brief,
     build_email_resolution,
     format_company_intelligence,
 )
@@ -74,7 +75,7 @@ from .services.email_intelligence import (
     format_email_intelligence_report,
 )
 
-APP_TITLE = "Darwill Compass 8.2.2 — Company Intelligence Stable"
+APP_TITLE = "Darwill Compass 8.4 — Scrollable Deal Desk"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -127,7 +128,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "8.2.2"
+PRODUCT_VERSION = "8.4"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -5932,7 +5933,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 8.2.2",
+            text="VERSION 8.4",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -6162,7 +6163,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 8.2.2",
+            text="Darwill Compass 8.4",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -8018,27 +8019,96 @@ class App(tk.Tk):
             expand=True,
             pady=(6, 0),
         )
-        email_tab = ttk.Frame(review_notebook, padding=6, style="Card.TFrame")
-        company_tab = ttk.Frame(review_notebook, padding=6, style="Card.TFrame")
-        intelligence_tab = ttk.Frame(review_notebook, padding=6, style="Card.TFrame")
-        acquisition_tab = ttk.Frame(review_notebook, padding=6, style="Card.TFrame")
-        review_notebook.add(email_tab, text="1. Email Review")
+        email_page = ttk.Frame(
+            review_notebook,
+            style="Card.TFrame",
+        )
+        company_page = ttk.Frame(
+            review_notebook,
+            style="Card.TFrame",
+        )
+        intelligence_page = ttk.Frame(
+            review_notebook,
+            style="Card.TFrame",
+        )
+        acquisition_page = ttk.Frame(
+            review_notebook,
+            style="Card.TFrame",
+        )
+
+        email_scroller = VerticalScrolledFrame(
+            email_page,
+            background=SURFACE,
+            padding=8,
+        )
+        company_scroller = VerticalScrolledFrame(
+            company_page,
+            background=SURFACE,
+            padding=8,
+        )
+        intelligence_scroller = VerticalScrolledFrame(
+            intelligence_page,
+            background=SURFACE,
+            padding=8,
+        )
+        acquisition_scroller = VerticalScrolledFrame(
+            acquisition_page,
+            background=SURFACE,
+            padding=8,
+        )
+        for scroller in (
+            email_scroller,
+            company_scroller,
+            intelligence_scroller,
+            acquisition_scroller,
+        ):
+            scroller.pack(fill="both", expand=True)
+
+        email_tab = email_scroller.content
+        company_tab = company_scroller.content
+        intelligence_tab = intelligence_scroller.content
+        acquisition_tab = acquisition_scroller.content
+
+        review_notebook.add(email_page, text="1. Email Review")
         review_notebook.add(
-            company_tab, text="2. Company Intelligence"
+            company_page, text="2. Company Intelligence"
         )
         review_notebook.add(
-            intelligence_tab, text="3. Contact Intelligence"
+            intelligence_page, text="3. Contact Intelligence"
         )
         review_notebook.add(
-            acquisition_tab, text="4. Contact Acquisition Report"
+            acquisition_page, text="4. Contact Acquisition Report"
         )
         self.review_notebook = review_notebook
-        self.company_tab = company_tab
-        self.intelligence_tab = intelligence_tab
-        self.acquisition_tab = acquisition_tab
+        self.email_tab = email_page
+        self.company_tab = company_page
+        self.intelligence_tab = intelligence_page
+        self.acquisition_tab = acquisition_page
+        self.review_tab_scrollers = {
+            "email": email_scroller,
+            "company": company_scroller,
+            "contact": intelligence_scroller,
+            "acquisition": acquisition_scroller,
+        }
+        def reset_selected_review_tab(_event=None):
+            selected = review_notebook.select()
+            scroller_by_page = {
+                str(email_page): email_scroller,
+                str(company_page): company_scroller,
+                str(intelligence_page): intelligence_scroller,
+                str(acquisition_page): acquisition_scroller,
+            }
+            scroller = scroller_by_page.get(selected)
+            if scroller is not None:
+                self.after_idle(scroller.scroll_to_top)
+
+        review_notebook.bind(
+            "<<NotebookTabChanged>>",
+            reset_selected_review_tab,
+            add="+",
+        )
 
         email_tab.columnconfigure(0, weight=1)
-        email_tab.rowconfigure(3, weight=1)
 
         email_header = ttk.Frame(
             email_tab,
@@ -8100,11 +8170,11 @@ class App(tk.Tk):
         email_body_frame.grid(
             row=3,
             column=0,
-            sticky="nsew",
+            sticky="ew",
         )
         self.review_email_body = tk.Text(
             email_body_frame,
-            height=20,
+            height=24,
             width=90,
             wrap="word",
             bg=WHITE,
@@ -8376,7 +8446,7 @@ class App(tk.Tk):
             font=("Segoe UI", 10),
             padx=12,
             pady=10,
-            height=10,
+            height=20,
         )
         configure_scrollable_text(
             evidence_text_frame,
@@ -8520,8 +8590,23 @@ class App(tk.Tk):
             font=("Segoe UI", 9),
         ).pack(anchor="w", pady=(3, 0))
 
-        self.contact_intelligence_text = tk.Text(
+        contact_report_frame = ttk.Frame(
             intelligence_tab,
+            style="Card.TFrame",
+        )
+        contact_report_frame.pack(fill="x", expand=False)
+        ttk.Label(
+            contact_report_frame,
+            text="Ranking Rationale and Contact Brief",
+            style="Card.TLabel",
+        ).pack(anchor="w", pady=(0, 4))
+        contact_text_frame = ttk.Frame(
+            contact_report_frame,
+            style="Card.TFrame",
+        )
+        contact_text_frame.pack(fill="x")
+        self.contact_intelligence_text = tk.Text(
+            contact_text_frame,
             wrap="word",
             bg=SURFACE_ALT,
             fg=TEXT,
@@ -8530,9 +8615,15 @@ class App(tk.Tk):
             font=("Segoe UI", 10),
             padx=12,
             pady=10,
-            height=12,
+            height=20,
         )
-        self.contact_intelligence_text.pack(fill="both", expand=True)
+        configure_scrollable_text(
+            contact_text_frame,
+            self.contact_intelligence_text,
+            horizontal=False,
+            vertical=True,
+            enable_mousewheel=True,
+        )
 
         required_company_intelligence_keys = {
             "fit": "Not evaluated",
@@ -8697,8 +8788,13 @@ class App(tk.Tk):
             style="Secondary.TButton",
         ).pack(side="right", padx=(0, 8))
 
-        self.contact_acquisition_text = tk.Text(
+        acquisition_report_frame = ttk.Frame(
             acquisition_tab,
+            style="Card.TFrame",
+        )
+        acquisition_report_frame.pack(fill="x")
+        self.contact_acquisition_text = tk.Text(
+            acquisition_report_frame,
             wrap="word",
             bg=SURFACE_ALT,
             fg=TEXT,
@@ -8707,13 +8803,20 @@ class App(tk.Tk):
             font=("Segoe UI", 10),
             padx=12,
             pady=10,
+            height=28,
         )
-        self.contact_acquisition_text.pack(fill="both", expand=True)
+        configure_scrollable_text(
+            acquisition_report_frame,
+            self.contact_acquisition_text,
+            horizontal=False,
+            vertical=True,
+            enable_mousewheel=True,
+        )
 
         review_actions = ttk.Frame(
             review_frame, style="Card.TFrame"
         )
-        review_actions.pack(fill="x")
+        review_actions.pack(fill="x", pady=(6, 0))
         ttk.Button(
             review_actions,
             text="Save Edits",
@@ -11096,21 +11199,41 @@ class App(tk.Tk):
             )
             or "Company size and location were not stored."
         )
-        company_intelligence = build_company_intelligence(item)
+        company_brief = build_company_brief(item)
+        company_presentation = build_company_presentation(item)
         if hasattr(self, "company_intelligence_vars"):
-            for key, value in company_intelligence.items():
+            for key, value in company_presentation.items():
                 if key in self.company_intelligence_vars:
                     self.company_intelligence_vars[key].set(str(value))
         if hasattr(self, "company_intelligence_text"):
             self.company_intelligence_text.configure(state="normal")
             self.company_intelligence_text.delete("1.0", "end")
+            executive_header = (
+                "EXECUTIVE BRIEF\n"
+                f"Fit: {company_brief.fit_summary}\n"
+                f"Confidence: {company_brief.confidence}%\n"
+                f"Risk: {company_brief.risk_assessment}\n"
+                f"Opportunity: {company_brief.opportunity_assessment}\n"
+                f"Recommended pitch: {company_brief.recommended_angle}\n\n"
+            )
             self.company_intelligence_text.insert(
                 "1.0",
-                company_intelligence.get("evidence_text", ""),
+                executive_header
+                + company_presentation.get("evidence_text", ""),
             )
             self.company_intelligence_text.configure(state="disabled")
 
-        self.review_recommendation.set(recommendation_reason)
+        executive_recommendation = (
+            recommendation_reason
+            if recommendation_reason
+            and recommendation_reason
+            != "Contact recommendation will appear here."
+            else (
+                f"{company_brief.fit_summary} "
+                f"Recommended angle: {company_brief.recommended_angle}"
+            )
+        )
+        self.review_recommendation.set(executive_recommendation)
         self.review_email_detail.set(
             (
                 f"{item.contact_email or 'No email found'} · "
@@ -11166,14 +11289,13 @@ class App(tk.Tk):
         self.contact_intelligence_text.delete("1.0", "end")
         self.contact_intelligence_text.insert("1.0", intelligence)
         self.contact_acquisition_text.delete("1.0", "end")
-        company_intelligence = build_company_intelligence(item)
         email_resolution = build_email_resolution(item)
         if hasattr(self, "company_intelligence_vars"):
             self.company_intelligence_vars["fit"].set(
-                company_intelligence.fit_summary
+                company_brief.fit_summary
             )
             self.company_intelligence_vars["confidence"].set(
-                f"{company_intelligence.confidence}%"
+                f"{company_brief.confidence}%"
             )
             self.company_intelligence_vars["email_status"].set(
                 email_resolution.label
@@ -11209,8 +11331,8 @@ class App(tk.Tk):
                 prospect_key,
                 "company_intelligence",
                 "fit_summary",
-                company_intelligence.fit_summary,
-                confidence=company_intelligence.confidence,
+                company_brief.fit_summary,
+                confidence=company_brief.confidence,
                 verification_status="computed",
             )
             self.intelligence_store.add_evidence(
@@ -11293,7 +11415,7 @@ class App(tk.Tk):
             )
             + "\n\n"
             + format_company_intelligence(
-                company_intelligence,
+                company_brief,
                 email_resolution,
             )
             + "\n\nDiagnostic log folder: "
