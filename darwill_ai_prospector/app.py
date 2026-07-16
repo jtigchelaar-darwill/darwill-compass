@@ -75,7 +75,7 @@ from .services.email_intelligence import (
     format_email_intelligence_report,
 )
 
-APP_TITLE = "Darwill Compass 8.7 — Complete Approval Workflow"
+APP_TITLE = "Darwill Compass 8.7.1 — Approval Fix and Contact Editor"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -128,7 +128,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "8.7"
+PRODUCT_VERSION = "8.7.1"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -6077,7 +6077,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 8.7",
+            text="VERSION 8.7.1",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -6307,7 +6307,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 8.7",
+            text="Darwill Compass 8.7.1",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -7986,6 +7986,12 @@ class App(tk.Tk):
             style="Primary.TButton",
             command=self._approve_selected_company,
         ).pack(side="left")
+        ttk.Button(
+            workflow_bar,
+            text="Edit Contact",
+            style="Secondary.TButton",
+            command=self._edit_selected_contact,
+        ).pack(side="left", padx=(8, 0))
 
         ttk.Button(
             workflow_bar,
@@ -12285,9 +12291,212 @@ class App(tk.Tk):
         except Exception:
             pass
 
+    def _approval_diagnostic_path(self) -> Path:
+        folder = LOG_DIR / "approval_diagnostics"
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder / (
+            datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            + "_approval_error.txt"
+        )
+
     def _approve_selected_company(self):
+        """Run approval with visible errors instead of silent Tk callbacks."""
+        try:
+            self._approve_selected_company_impl()
+        except Exception as exc:
+            diagnostic = self._approval_diagnostic_path()
+            import traceback
+            diagnostic.write_text(
+                traceback.format_exc(),
+                encoding="utf-8",
+            )
+            messagebox.showerror(
+                APP_TITLE,
+                (
+                    "Approval could not be completed.\n\n"
+                    f"{type(exc).__name__}: {exc}\n\n"
+                    "A diagnostic file was saved to:\n"
+                    f"{diagnostic}"
+                ),
+            )
+
+    def _edit_selected_contact(self):
+        """Edit the selected Deal Desk contact without changing the company."""
+        item = self._selected_deal_desk_item()
+        if not item:
+            return
+
+        editor = tk.Toplevel(self)
+        editor.title(f"Edit Contact — {item.contact_name}")
+        editor.geometry("620x560")
+        editor.minsize(540, 480)
+        editor.transient(self)
+        editor.grab_set()
+        editor.configure(bg=SURFACE_ALT)
+
+        container = ttk.Frame(editor, padding=18)
+        container.pack(fill="both", expand=True)
+        container.columnconfigure(1, weight=1)
+
+        first_name, last_name = split_name(item.contact_name)
+        values = {
+            "first_name": tk.StringVar(value=first_name),
+            "last_name": tk.StringVar(value=last_name),
+            "title": tk.StringVar(value=item.contact_title),
+            "email": tk.StringVar(value=item.contact_email),
+            "phone": tk.StringVar(value=item.contact_phone),
+            "linkedin": tk.StringVar(value=item.contact_linkedin_url),
+        }
+
+        ttk.Label(
+            container,
+            text=item.company_name,
+            style="SectionTitle.TLabel",
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 14))
+
+        fields = [
+            ("First name", "first_name"),
+            ("Last name", "last_name"),
+            ("Title", "title"),
+            ("Email", "email"),
+            ("Phone", "phone"),
+            ("LinkedIn URL", "linkedin"),
+        ]
+        for row, (label, key) in enumerate(fields, start=1):
+            ttk.Label(container, text=label).grid(
+                row=row,
+                column=0,
+                sticky="w",
+                padx=(0, 12),
+                pady=6,
+            )
+            ttk.Entry(
+                container,
+                textvariable=values[key],
+            ).grid(
+                row=row,
+                column=1,
+                sticky="ew",
+                pady=6,
+            )
+
+        ttk.Label(container, text="Contact notes").grid(
+            row=7,
+            column=0,
+            sticky="nw",
+            padx=(0, 12),
+            pady=6,
+        )
+        notes = tk.Text(
+            container,
+            wrap="word",
+            height=8,
+            font=("Segoe UI", 10),
+        )
+        notes.grid(row=7, column=1, sticky="nsew", pady=6)
+        notes.insert("1.0", item.reviewer_notes or "")
+        container.rowconfigure(7, weight=1)
+
+        status_var = tk.StringVar(value="")
+        ttk.Label(
+            container,
+            textvariable=status_var,
+            style="Muted.TLabel",
+        ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+        actions = ttk.Frame(container)
+        actions.grid(row=9, column=0, columnspan=2, sticky="e", pady=(16, 0))
+
+        def save_contact():
+            first = values["first_name"].get().strip()
+            last = values["last_name"].get().strip()
+            full_name = " ".join(part for part in [first, last] if part)
+            if not full_name:
+                status_var.set("Enter at least a first or last name.")
+                return
+
+            email = values["email"].get().strip()
+            if email and not re.fullmatch(
+                r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}",
+                email,
+                re.I,
+            ):
+                status_var.set("The email address is not valid.")
+                return
+
+            item.contact_name = full_name
+            item.contact_title = values["title"].get().strip()
+            item.contact_email = email
+            item.contact_phone = values["phone"].get().strip()
+            item.contact_linkedin_url = values["linkedin"].get().strip()
+            item.reviewer_notes = notes.get("1.0", "end").strip()
+            item.updated_at = now_iso()
+
+            if email:
+                item.contact_email_status = "Manually edited in Compass"
+                item.contact_email_verification_status = "Manual Review"
+                item.contact_email_confidence = max(
+                    int(item.contact_email_confidence or 0),
+                    80,
+                )
+            else:
+                item.contact_email_status = "Missing"
+                item.contact_email_verification_status = "Missing"
+                item.contact_email_confidence = 0
+
+            self._update_item_deliverability(item)
+            save_outreach_queue(self.review_queue)
+
+            try:
+                key = self.intelligence_store.upsert_queue_item(item)
+                self.intelligence_store.append_timeline(
+                    key,
+                    "contact_edited",
+                    "Contact edited manually in Compass",
+                    "deal_desk",
+                    {
+                        "queue_id": item.queue_id,
+                        "contact_name": item.contact_name,
+                        "contact_title": item.contact_title,
+                        "contact_email": item.contact_email,
+                        "contact_phone": item.contact_phone,
+                        "contact_linkedin_url": item.contact_linkedin_url,
+                    },
+                )
+            except Exception:
+                pass
+
+            self._refresh_deal_desk()
+            if self.deal_tree.exists(item.queue_id):
+                self.deal_tree.selection_set(item.queue_id)
+                self.deal_tree.see(item.queue_id)
+                self._load_selected_queue_item()
+            editor.destroy()
+
+        ttk.Button(
+            actions,
+            text="Cancel",
+            style="Secondary.TButton",
+            command=editor.destroy,
+        ).pack(side="right")
+        ttk.Button(
+            actions,
+            text="Save Contact",
+            style="Primary.TButton",
+            command=save_contact,
+        ).pack(side="right", padx=(0, 8))
+
+        editor.bind("<Escape>", lambda _event: editor.destroy())
+        editor.update_idletasks()
+        editor.lift()
+        editor.focus_force()
+
+    def _approve_selected_company_impl(self):
+        self.workspace_status_var.set("Preparing company approval…")
+        self.update_idletasks()
         selected = self._selected_deal_desk_item()
         if not selected:
+            self.workspace_status_var.set("Deal Desk · Ready")
             return
         items = self._selected_company_items()
         if not items:
@@ -12334,12 +12543,20 @@ class App(tk.Tk):
                 f"threshold of {self.minimum_inbox_score.get()}."
             )
 
+        self.workspace_status_var.set(
+            f"Waiting for approval confirmation · {selected.company_name}"
+        )
         if not messagebox.askyesno(
             APP_TITLE,
             confirmation,
             icon="warning" if validation_issues else "question",
         ):
+            self.workspace_status_var.set("Deal Desk · Ready")
             return
+        self.workspace_status_var.set(
+            f"Saving approval · {selected.company_name}"
+        )
+        self.update_idletasks()
 
         approved_at = now_iso()
         approval_db = HistoryDB(DB_PATH)
@@ -12414,6 +12631,9 @@ class App(tk.Tk):
             self.deal_tree.see(selected.queue_id)
             self._load_selected_queue_item()
 
+        self.workspace_status_var.set(
+            f"Approved · {selected.company_name}"
+        )
         messagebox.showinfo(
             APP_TITLE,
             (
