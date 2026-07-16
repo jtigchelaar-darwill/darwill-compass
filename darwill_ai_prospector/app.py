@@ -50,13 +50,22 @@ from .ui.theme import (
     apply_compass_theme,
     workspace_palette,
 )
+from .ui.mcp_explorer import open_mcp_explorer_window
+from .services.zoominfo_enrichment import (
+    apply_enrichment_record,
+    best_enrichment_record,
+    classify_enrichment_failure,
+    collect_email_diagnostics,
+    enrichment_result_records,
+    recursive_email_value,
+)
 from .services.intelligence_store import IntelligenceStore
 from .services.email_intelligence import (
     build_email_intelligence,
     format_email_intelligence_report,
 )
 
-APP_TITLE = "Darwill Compass 7.8 — Deal Desk Workflow"
+APP_TITLE = "Darwill Compass 8.0 — Modular Architecture"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -109,7 +118,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "7.8"
+PRODUCT_VERSION = "8.0"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -4339,195 +4348,20 @@ EMAIL_FIELD_NAMES = {
 }
 
 
-def collect_email_diagnostics(value: Any, path: str = "") -> list[dict[str, str]]:
-    found: list[dict[str, str]] = []
-    if isinstance(value, dict):
-        for key, child in value.items():
-            child_path = f"{path}.{key}" if path else str(key)
-            normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
-            if normalized in EMAIL_FIELD_NAMES:
-                found.append({
-                    "path": child_path,
-                    "field": str(key),
-                    "value": str(child or "").strip(),
-                })
-            found.extend(collect_email_diagnostics(child, child_path))
-    elif isinstance(value, list):
-        for index, child in enumerate(value):
-            found.extend(
-                collect_email_diagnostics(child, f"{path}[{index}]")
-            )
-    return found
-
-
-def recursive_email_value(value: Any) -> tuple[str, str]:
-    for candidate in collect_email_diagnostics(value):
-        email = candidate["value"].strip()
-        if re.fullmatch(
-            r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}",
-            email,
-            re.I,
-        ):
-            return email, candidate["path"]
-    try:
-        blob = json.dumps(value, default=str)
-    except Exception:
-        blob = str(value)
-    match = re.search(
-        r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}",
-        blob,
-        re.I,
-    )
-    return (match.group(0), "payload_text_scan") if match else ("", "")
 
 
 
-def normalize_contact_name(value: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
-
-
-def enrichment_result_records(payload: Any) -> list[dict[str, Any]]:
-    """
-    Return successful contact enrichment result objects from payloads like:
-    {"contact_1": {"success": true, "data": {...}}}
-    """
-    records: list[dict[str, Any]] = []
-    if not isinstance(payload, dict):
-        return records
-
-    for value in payload.values():
-        if not isinstance(value, dict):
-            continue
-        if value.get("success") is True and isinstance(value.get("data"), dict):
-            records.append(value["data"])
-        elif isinstance(value.get("data"), dict):
-            data = value["data"]
-            if data.get("success") is True:
-                records.append(data)
-    return records
-
-
-def best_enrichment_record(
-    payload: Any,
-    contact: RankedContact,
-) -> dict[str, Any]:
-    records = enrichment_result_records(payload)
-    if not records:
-        return {}
-
-    target_first = normalize_contact_name(contact.first_name)
-    target_last = normalize_contact_name(contact.last_name)
-    target_company = normalize_contact_name(contact.company_name)
-    target_title = normalize_contact_name(contact.title)
-
-    def score(record: dict[str, Any]) -> int:
-        points = 0
-        if normalize_contact_name(record.get("firstName", "")) == target_first:
-            points += 4
-        if normalize_contact_name(record.get("lastName", "")) == target_last:
-            points += 4
-        if normalize_contact_name(record.get("companyName", "")) == target_company:
-            points += 3
-        if normalize_contact_name(
-            record.get("jobTitle", record.get("title", ""))
-        ) == target_title:
-            points += 2
-        if str(record.get("matchStatus", "")).upper() == "FULL_MATCH":
-            points += 5
-        if record.get("email"):
-            points += 5
-        return points
-
-    return max(records, key=score)
-
-
-def apply_enrichment_record(
-    contact: RankedContact,
-    record: dict[str, Any],
-) -> None:
-    if not record:
-        return
-
-    email = str(record.get("email", "") or "").strip()
-    mobile = str(record.get("mobilePhone", "") or "").strip()
-    phone = str(record.get("phone", "") or "").strip()
-    company_id = str(
-        record.get("zoominfoCompanyId", record.get("companyId", "")) or ""
-    ).strip()
-    match_status = str(record.get("matchStatus", "") or "").strip()
-    retry_info = record.get("retryInfo", {})
-    warnings = record.get("warnings", [])
-
-    if email:
-        contact.email = email
-        contact.email_status = "ZoomInfo enrichment returned"
-        contact.email_confidence = 99 if match_status == "FULL_MATCH" else 96
-        contact.email_verification_status = "ZoomInfo Enriched"
-        contact.email_recovery_method = (
-            "ZoomInfo identity-field enrichment "
-            f"({match_status or 'matched'})"
-        )
-
-    if mobile:
-        contact.mobile_phone = mobile
-        contact.phone_status = "ZoomInfo enrichment returned"
-        contact.phone_confidence = 96
-    elif phone:
-        contact.direct_phone = phone
-        contact.phone_status = "ZoomInfo enrichment returned"
-        contact.phone_confidence = 94
-
-    if company_id:
-        contact.zoominfo_enriched_company_id = company_id
-
-    contact.zoominfo_match_status = match_status
-    contact.zoominfo_retry_message = str(
-        retry_info.get("message", "") if isinstance(retry_info, dict) else ""
-    )
-    contact.zoominfo_enrichment_warnings = (
-        json.dumps(warnings, default=str)
-        if warnings
-        else ""
-    )
-    contact.zoominfo_enrichment_result = (
-        "Verified email recovered"
-        if email
-        else "Contact enriched but no email returned"
-    )
 
 
 
-def classify_enrichment_failure(
-    payload: Any,
-    *,
-    person_id: str,
-    extracted_email: str,
-) -> str:
-    if extracted_email:
-        return "Email recovered"
-    blob = text_blob(payload).lower()
-    if any(term in blob for term in [
-        "not entitled", "entitlement", "permission denied",
-        "forbidden", "unauthorized",
-    ]):
-        return "ZoomInfo entitlement or permission issue"
-    if any(term in blob for term in [
-        "rate limit", "too many requests", "throttl",
-    ]):
-        return "ZoomInfo rate limit"
-    if any(term in blob for term in [
-        "invalid person id",
-        "invalid personid",
-        "invalid contact id",
-        "contact not found",
-        "person not found",
-        "no matching contact",
-        "unable to match contact",
-    ]):
-        return f"Invalid or unmatched ZoomInfo person ID: {person_id}"
-    if not records_from_payload(payload):
-        return "Enrichment returned no contact records"
-    return "Enrichment returned a contact record but no email field"
+
+
+
+
+
+
+
+
 
 
 
@@ -6083,7 +5917,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 7.8",
+            text="VERSION 8.0",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -6313,7 +6147,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 7.8",
+            text="Darwill Compass 8.0",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -11697,457 +11531,14 @@ class App(tk.Tk):
         return result or {"value": str(tool_value)}
 
     def _open_mcp_explorer(self):
-        # Self-contained developer window. Do not depend on Compass theme
-        # constants because older workspaces may not define the same names.
-        explorer_bg = "#F4F6F8"
-        explorer_navy = "#0B2D4F"
-        explorer_white = "#FFFFFF"
-        explorer_muted = "#CFE3F6"
-
-        explorer = tk.Toplevel(self)
-        explorer.title("ZoomInfo MCP Explorer")
-        explorer.geometry("1250x780")
-        explorer.minsize(980, 620)
-        explorer.configure(bg=explorer_bg)
-        explorer.transient(self)
-
-        header = tk.Frame(explorer, bg=explorer_navy, padx=18, pady=14)
-        header.pack(fill="x")
-        tk.Label(
-            header,
-            text="ZOOMINFO DEVELOPER TOOLS",
-            bg=explorer_navy,
-            fg="#75B6F5",
-            font=("Segoe UI Semibold", 8),
-        ).pack(anchor="w")
-        tk.Label(
-            header,
-            text="MCP Explorer",
-            bg=explorer_navy,
-            fg=explorer_white,
-            font=("Segoe UI Semibold", 20),
-        ).pack(anchor="w", pady=(2, 2))
-        tk.Label(
-            header,
-            text=(
-                "Inspect the exact tools and schemas exposed by your "
-                "ZoomInfo MCP connection. Test one tool at a time without "
-                "rerunning Discovery."
-            ),
-            bg=explorer_navy,
-            fg=explorer_muted,
-            font=("Segoe UI", 10),
-        ).pack(anchor="w")
-
-        toolbar = ttk.Frame(explorer, padding=(14, 12))
-        toolbar.pack(fill="x")
-        status_var = tk.StringVar(value="Not connected")
-        ttk.Button(
-            toolbar,
-            text="Connect and Load Tools",
-            style="TButton",
-            command=lambda: load_tools(),
-        ).pack(side="left")
-        ttk.Button(
-            toolbar,
-            text="Save Explorer Session",
-            style="TButton",
-            command=lambda: save_session(),
-        ).pack(side="left", padx=(8, 0))
-        ttk.Label(
-            toolbar,
-            textvariable=status_var,
-            style="TLabel",
-        ).pack(side="left", padx=(12, 0))
-
-        body = ttk.Panedwindow(explorer, orient="horizontal")
-        body.pack(fill="both", expand=True, padx=14, pady=(0, 14))
-
-        left = ttk.Frame(body, padding=8)
-        middle = ttk.Frame(body, padding=8)
-        right = ttk.Frame(body, padding=8)
-        body.add(left, weight=1)
-        body.add(middle, weight=2)
-        body.add(right, weight=2)
-
-        ttk.Label(
-            left,
-            text="Available Tools",
-            style="TLabel",
-        ).pack(anchor="w", pady=(0, 6))
-        tool_filter_var = tk.StringVar()
-        filter_entry = ttk.Entry(
-            left,
-            textvariable=tool_filter_var,
+        """Open the standalone ZoomInfo MCP developer window."""
+        open_mcp_explorer_window(
+            parent=self,
+            app_title=APP_TITLE,
+            log_dir=LOG_DIR,
+            connection_factory=self._mcp_explorer_connection,
         )
-        filter_entry.pack(fill="x", pady=(0, 6))
 
-        tool_list = tk.Listbox(
-            left,
-            exportselection=False,
-            font=("Consolas", 10),
-        )
-        tool_list.pack(fill="both", expand=True)
-
-        ttk.Label(
-            middle,
-            text="Tool Schema",
-            style="TLabel",
-        ).pack(anchor="w", pady=(0, 6))
-        schema_text = tk.Text(
-            middle,
-            wrap="none",
-            font=("Consolas", 9),
-            undo=False,
-        )
-        schema_text.pack(fill="both", expand=True)
-
-        ttk.Label(
-            right,
-            text="Request and Response",
-            style="TLabel",
-        ).pack(anchor="w", pady=(0, 6))
-
-        request_frame = ttk.LabelFrame(
-            right,
-            text="Request JSON",
-            padding=6,
-        )
-        request_frame.pack(fill="both", expand=True)
-        request_text = tk.Text(
-            request_frame,
-            wrap="none",
-            font=("Consolas", 9),
-            height=13,
-        )
-        request_text.pack(fill="both", expand=True)
-
-        action_bar = ttk.Frame(right)
-        action_bar.pack(fill="x", pady=8)
-        ttk.Button(
-            action_bar,
-            text="Load Sample Request",
-            style="TButton",
-            command=lambda: load_sample_request(),
-        ).pack(side="left")
-        ttk.Button(
-            action_bar,
-            text="Run Selected Tool",
-            style="TButton",
-            command=lambda: run_selected_tool(),
-        ).pack(side="left", padx=(8, 0))
-
-        response_frame = ttk.LabelFrame(
-            right,
-            text="Raw Response",
-            padding=6,
-        )
-        response_frame.pack(fill="both", expand=True)
-        response_text = tk.Text(
-            response_frame,
-            wrap="none",
-            font=("Consolas", 9),
-            height=13,
-        )
-        response_text.pack(fill="both", expand=True)
-
-        state = {
-            "mcp": None,
-            "tools": {},
-            "visible_names": [],
-            "last_request": {},
-            "last_response": {},
-            "selected_tool": "",
-        }
-
-        def pretty(value):
-            return json.dumps(value, indent=2, default=str, sort_keys=True)
-
-        def selected_tool_name():
-            selection = tool_list.curselection()
-            if not selection:
-                return ""
-            index = selection[0]
-            if index >= len(state["visible_names"]):
-                return ""
-            return state["visible_names"][index]
-
-        def refresh_list(*_args):
-            query = tool_filter_var.get().strip().lower()
-            names = sorted(state["tools"].keys())
-            if query:
-                names = [name for name in names if query in name.lower()]
-            state["visible_names"] = names
-            tool_list.delete(0, "end")
-            for name in names:
-                tool_list.insert("end", name)
-            status_var.set(
-                f"{len(names)} shown / {len(state['tools'])} tools loaded"
-                if state["tools"]
-                else "Not connected"
-            )
-
-        def show_schema(_event=None):
-            name = selected_tool_name()
-            if not name:
-                return
-            state["selected_tool"] = name
-            schema = self._mcp_schema_for_tool(state["tools"][name])
-            schema_text.delete("1.0", "end")
-            schema_text.insert("1.0", pretty(schema))
-
-        def load_tools():
-            try:
-                status_var.set("Connecting to ZoomInfo MCP…")
-                explorer.update_idletasks()
-                mcp = self._mcp_explorer_connection()
-                tools = mcp.run(mcp.discover())
-                if not isinstance(tools, dict):
-                    raise RuntimeError(
-                        "MCP discovery returned an unexpected tool collection."
-                    )
-                state["mcp"] = mcp
-                state["tools"] = tools
-                refresh_list()
-                if state["visible_names"]:
-                    tool_list.selection_set(0)
-                    show_schema()
-                status_var.set(f"{len(tools)} MCP tools loaded")
-            except Exception as exc:
-                status_var.set("Connection failed")
-                messagebox.showerror(
-                    APP_TITLE,
-                    f"Could not load MCP tools:\n\n{exc}",
-                    parent=explorer,
-                )
-
-        def schema_properties(name):
-            tool = self._mcp_schema_for_tool(
-                state["tools"].get(name, {})
-            )
-            schema = (
-                tool.get("inputSchema")
-                or tool.get("input_schema")
-                or tool.get("schema")
-                or {}
-            )
-            return schema if isinstance(schema, dict) else {}
-
-        def load_sample_request():
-            name = selected_tool_name()
-            if not name:
-                messagebox.showinfo(
-                    APP_TITLE,
-                    "Select a tool first.",
-                    parent=explorer,
-                )
-                return
-
-            schema = schema_properties(name)
-            props = schema.get("properties", {})
-            required = schema.get("required", [])
-            sample = {}
-
-            def placeholder(field, definition):
-                field_lower = field.lower()
-                if field_lower in {"personid", "contactid"}:
-                    return "ZOOMINFO_PERSON_ID"
-                if field_lower in {"companyid", "zoominfocompanyid"}:
-                    return "ZOOMINFO_COMPANY_ID"
-                if field_lower == "firstname":
-                    return "Gabe"
-                if field_lower == "lastname":
-                    return "Garwick"
-                if field_lower in {"companyname", "company"}:
-                    return "Mr. Electric"
-                if field_lower in {"jobtitle", "title"}:
-                    return "Marketing Specialist"
-                if field_lower == "requiredfields":
-                    return [
-                        "firstName",
-                        "lastName",
-                        "email",
-                        "phone",
-                        "mobilePhone",
-                        "jobTitle",
-                        "companyName",
-                    ]
-                if field_lower == "contacts":
-                    return [{
-                        "firstName": "Gabe",
-                        "lastName": "Garwick",
-                        "companyName": "Mr. Electric",
-                        "jobTitle": "Marketing Specialist",
-                    }]
-                field_type = definition.get("type")
-                if field_type == "boolean":
-                    return True
-                if field_type in {"integer", "number"}:
-                    return 1
-                if field_type == "array":
-                    return []
-                if field_type == "object":
-                    return {}
-                return ""
-
-            for field in required:
-                definition = props.get(field, {})
-                sample[field] = placeholder(field, definition)
-
-            # Useful defaults for known ZoomInfo tools.
-            if name == "enrich_contacts":
-                sample = {
-                    "contacts": [{
-                        "firstName": "Gabe",
-                        "lastName": "Garwick",
-                        "companyName": "Mr. Electric",
-                        "jobTitle": "Marketing Specialist",
-                    }],
-                    "requiredFields": [
-                        "firstName",
-                        "lastName",
-                        "email",
-                        "phone",
-                        "mobilePhone",
-                        "jobTitle",
-                        "companyName",
-                    ],
-                    "userIntent": (
-                        "Test one existing ZoomInfo contact and return the "
-                        "verified business email when available."
-                    ),
-                }
-            elif name == "search_contacts":
-                sample.update({
-                    "firstName": "Gabe",
-                    "lastName": "Garwick",
-                    "companyName": "Mr. Electric",
-                })
-
-            request_text.delete("1.0", "end")
-            request_text.insert("1.0", pretty(sample))
-
-        def run_selected_tool():
-            name = selected_tool_name()
-            if not name:
-                messagebox.showinfo(
-                    APP_TITLE,
-                    "Select a tool first.",
-                    parent=explorer,
-                )
-                return
-            if state["mcp"] is None:
-                messagebox.showinfo(
-                    APP_TITLE,
-                    "Connect and load tools first.",
-                    parent=explorer,
-                )
-                return
-
-            raw = request_text.get("1.0", "end").strip()
-            try:
-                payload = json.loads(raw or "{}")
-            except json.JSONDecodeError as exc:
-                messagebox.showerror(
-                    APP_TITLE,
-                    f"Request JSON is invalid:\n\n{exc}",
-                    parent=explorer,
-                )
-                return
-
-            try:
-                status_var.set(f"Running {name}…")
-                explorer.update_idletasks()
-                response = state["mcp"].run(
-                    state["mcp"].call(name, payload)
-                )
-                state["last_request"] = payload
-                state["last_response"] = response
-                state["selected_tool"] = name
-                response_text.delete("1.0", "end")
-                response_text.insert("1.0", pretty(response))
-                status_var.set(f"{name} completed")
-
-                session_dir = LOG_DIR / "mcp_explorer"
-                session_dir.mkdir(parents=True, exist_ok=True)
-                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                tool_dir = session_dir / f"{stamp}_{name}"
-                tool_dir.mkdir(parents=True, exist_ok=True)
-                (tool_dir / "tool_schema.json").write_text(
-                    schema_text.get("1.0", "end").strip(),
-                    encoding="utf-8",
-                )
-                (tool_dir / "request.json").write_text(
-                    pretty(payload),
-                    encoding="utf-8",
-                )
-                (tool_dir / "response.json").write_text(
-                    pretty(response),
-                    encoding="utf-8",
-                )
-                status_var.set(
-                    f"{name} completed — saved to {tool_dir}"
-                )
-            except Exception as exc:
-                status_var.set(f"{name} failed")
-                response_text.delete("1.0", "end")
-                response_text.insert(
-                    "1.0",
-                    pretty({
-                        "success": False,
-                        "tool": name,
-                        "error": str(exc),
-                    }),
-                )
-                messagebox.showerror(
-                    APP_TITLE,
-                    f"MCP tool failed:\n\n{exc}",
-                    parent=explorer,
-                )
-
-        def save_session():
-            session_dir = LOG_DIR / "mcp_explorer"
-            session_dir.mkdir(parents=True, exist_ok=True)
-            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output = session_dir / f"{stamp}_manual_session.json"
-            output.write_text(
-                pretty({
-                    "selectedTool": state["selected_tool"],
-                    "tools": {
-                        name: self._mcp_schema_for_tool(value)
-                        for name, value in state["tools"].items()
-                    },
-                    "lastRequest": state["last_request"],
-                    "lastResponse": state["last_response"],
-                }),
-                encoding="utf-8",
-            )
-            messagebox.showinfo(
-                APP_TITLE,
-                f"Explorer session saved to:\n\n{output}",
-                parent=explorer,
-            )
-
-        tool_filter_var.trace_add("write", refresh_list)
-        tool_list.bind("<<ListboxSelect>>", show_schema)
-
-        request_text.insert(
-            "1.0",
-            pretty({
-                "instructions": (
-                    "Connect, select a tool, then load or enter a request."
-                )
-            }),
-        )
-        response_text.insert(
-            "1.0",
-            pretty({
-                "status": "No tool has been run yet."
-            }),
-        )
-        explorer.update_idletasks()
-        explorer.lift()
-        explorer.focus_force()
 
 
     def _selected_deal_desk_item(self):
