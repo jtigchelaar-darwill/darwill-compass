@@ -75,7 +75,7 @@ from .services.email_intelligence import (
     format_email_intelligence_report,
 )
 
-APP_TITLE = "Darwill Compass 8.5 — Executive Summary"
+APP_TITLE = "Darwill Compass 8.6 — Expandable Tab Workspace"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -128,7 +128,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "8.5"
+PRODUCT_VERSION = "8.6"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -5936,7 +5936,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 8.5",
+            text="VERSION 8.6",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -6166,7 +6166,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 8.5",
+            text="Darwill Compass 8.6",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -7860,6 +7860,14 @@ class App(tk.Tk):
             command=self._show_email_review_tab,
         ).pack(side="right")
 
+        self.expand_tabs_button = ttk.Button(
+            workflow_bar,
+            text="Expand Tabs",
+            style="Secondary.TButton",
+            command=self._toggle_deal_desk_tabs,
+        )
+        self.expand_tabs_button.pack(side="right", padx=(0, 8))
+
         ttk.Button(
             workflow_bar,
             text="Sync Company to HubSpot",
@@ -7867,8 +7875,38 @@ class App(tk.Tk):
             command=self._sync_selected_company_to_hubspot,
         ).pack(side="right", padx=(0, 8))
 
-        summary_card = tk.Frame(
+        review_vertical_pane = ttk.Panedwindow(
             review_frame,
+            orient="vertical",
+        )
+        review_vertical_pane.pack(
+            fill="both",
+            expand=True,
+            pady=(6, 0),
+        )
+
+        review_summary_pane = ttk.Frame(
+            review_vertical_pane,
+            style="Card.TFrame",
+        )
+        review_tabs_pane = ttk.Frame(
+            review_vertical_pane,
+            style="Card.TFrame",
+        )
+        review_vertical_pane.add(review_summary_pane, weight=2)
+        review_vertical_pane.add(review_tabs_pane, weight=5)
+
+        self.review_vertical_pane = review_vertical_pane
+        self.review_summary_pane = review_summary_pane
+        self.review_tabs_pane = review_tabs_pane
+        self.review_tabs_expanded = False
+        self.after(
+            300,
+            self._set_initial_review_vertical_split,
+        )
+
+        summary_card = tk.Frame(
+            review_summary_pane,
             bg=SURFACE,
             highlightthickness=1,
             highlightbackground=BORDER,
@@ -8025,11 +8063,10 @@ class App(tk.Tk):
 
         why_row.bind("<Configure>", resize_why_contact, add="+")
 
-        review_notebook = ttk.Notebook(review_frame)
+        review_notebook = ttk.Notebook(review_tabs_pane)
         review_notebook.pack(
             fill="both",
             expand=True,
-            pady=(6, 0),
         )
         email_page = ttk.Frame(
             review_notebook,
@@ -8992,7 +9029,7 @@ class App(tk.Tk):
         )
 
         review_actions = ttk.Frame(
-            review_frame, style="Card.TFrame"
+            review_tabs_pane, style="Card.TFrame"
         )
         review_actions.pack(fill="x", pady=(6, 0))
         ttk.Button(
@@ -12320,6 +12357,48 @@ class App(tk.Tk):
                 APP_TITLE,
                 f"HubSpot synchronization failed:\n\n{exc}",
             )
+
+
+    def _set_initial_review_vertical_split(self):
+        """Give the tabs most of the right-side vertical workspace."""
+        pane = getattr(self, "review_vertical_pane", None)
+        if pane is None:
+            return
+        try:
+            height = max(1, pane.winfo_height())
+            # About 31% for the contact/company summary, 69% for the tabs.
+            pane.sashpos(0, max(170, int(height * 0.31)))
+        except Exception:
+            pass
+
+    def _toggle_deal_desk_tabs(self):
+        """Expand the tab workspace or restore the balanced split."""
+        pane = getattr(self, "review_vertical_pane", None)
+        if pane is None:
+            return
+
+        try:
+            height = max(1, pane.winfo_height())
+            self.review_tabs_expanded = not getattr(
+                self,
+                "review_tabs_expanded",
+                False,
+            )
+            if self.review_tabs_expanded:
+                # Preserve a compact identity strip while maximizing tabs.
+                pane.sashpos(0, 92)
+                if hasattr(self, "expand_tabs_button"):
+                    self.expand_tabs_button.configure(
+                        text="Restore Summary"
+                    )
+            else:
+                pane.sashpos(0, max(170, int(height * 0.31)))
+                if hasattr(self, "expand_tabs_button"):
+                    self.expand_tabs_button.configure(
+                        text="Expand Tabs"
+                    )
+        except Exception:
+            pass
 
 
     def _save_queue_edits(self, show_message: bool = True):
