@@ -32,6 +32,19 @@ def build_email_intelligence(item: Any) -> EmailIntelligenceDecision:
         _value(item, "contact_acquisition_report", ""),
     ]
     combined = " ".join(str(value or "") for value in fields).lower()
+    explicit_availability = str(
+        _value(item, "contact_zoominfo_email_availability", "Unknown")
+        or "Unknown"
+    ).strip()
+    explicit_detail = str(
+        _value(item, "contact_zoominfo_email_availability_detail", "") or ""
+    ).strip()
+    enrichment_attempted = bool(
+        _value(item, "contact_zoominfo_enrichment_attempted", False)
+    )
+    enrichment_result = str(
+        _value(item, "contact_zoominfo_enrichment_result", "") or ""
+    ).strip()
     pattern = str(
         _value(item, "contact_predicted_email_pattern", "") or ""
     ).strip()
@@ -75,6 +88,33 @@ def build_email_intelligence(item: Any) -> EmailIntelligenceDecision:
             "Validate before send" if confidence >= 75 else "Research further",
             "A predicted address exists but is not verified. Attempt free validation first.",
             False, "Potential verification upgrade",
+        )
+
+    if explicit_availability == "Available" and not email:
+        return EmailIntelligenceDecision(
+            "Not found", pattern or "No reliable pattern",
+            max(current, min(90, 40 + support * 14)),
+            "Verified email indicated",
+            (
+                "Review enrichment result"
+                if enrichment_attempted
+                else "Use 1 credit"
+            ),
+            (
+                explicit_detail
+                + (" " + enrichment_result if enrichment_result else "")
+            ).strip(),
+            not enrichment_attempted,
+            "Missing → verified business email",
+        )
+
+    if explicit_availability == "Unavailable" and not email:
+        return EmailIntelligenceDecision(
+            "Not found", pattern or "No reliable pattern",
+            max(current, min(90, 40 + support * 14)),
+            "No email indicated", "Skip credit",
+            explicit_detail or "ZoomInfo indicates no email is available.",
+            False, "None expected",
         )
 
     available = any(phrase in combined for phrase in [

@@ -56,7 +56,7 @@ from .services.email_intelligence import (
     format_email_intelligence_report,
 )
 
-APP_TITLE = "Darwill Compass 7.0 — Intelligence Foundation"
+APP_TITLE = "Darwill Compass 7.8 — Deal Desk Workflow"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -109,7 +109,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "7.0"
+PRODUCT_VERSION = "7.8"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -1681,6 +1681,14 @@ def load_outreach_queue() -> list[ReviewQueueItem]:
                 "contact_domain_mail_status": "",
                 "contact_domain_mail_detail": "",
                 "contact_deep_recovery_sources": "",
+                "contact_zoominfo_email_availability": "Unknown",
+                "contact_zoominfo_email_availability_detail": "",
+                "contact_zoominfo_enrichment_attempted": False,
+                "contact_zoominfo_enrichment_result": "",
+                "contact_zoominfo_match_status": "",
+                "contact_zoominfo_retry_message": "",
+                "contact_zoominfo_enriched_company_id": "",
+                "contact_zoominfo_enrichment_warnings": "",
             }
             for key, value in defaults.items():
                 clean.setdefault(key, value)
@@ -1755,6 +1763,30 @@ def queue_items_from_run(
             contact_domain_mail_status=contact.domain_mail_status,
             contact_domain_mail_detail=contact.domain_mail_detail,
             contact_deep_recovery_sources=contact.deep_recovery_sources,
+            contact_zoominfo_email_availability=(
+                contact.zoominfo_email_availability
+            ),
+            contact_zoominfo_email_availability_detail=(
+                contact.zoominfo_email_availability_detail
+            ),
+            contact_zoominfo_enrichment_attempted=(
+                contact.zoominfo_enrichment_attempted
+            ),
+            contact_zoominfo_enrichment_result=(
+                contact.zoominfo_enrichment_result
+            ),
+            contact_zoominfo_match_status=(
+                contact.zoominfo_match_status
+            ),
+            contact_zoominfo_retry_message=(
+                contact.zoominfo_retry_message
+            ),
+            contact_zoominfo_enriched_company_id=(
+                contact.zoominfo_enriched_company_id
+            ),
+            contact_zoominfo_enrichment_warnings=(
+                contact.zoominfo_enrichment_warnings
+            ),
             recommended_strategy=draft.recommended_strategy,
             outreach_confidence=draft.outreach_confidence,
             subject_line=draft.subject_line,
@@ -2625,6 +2657,16 @@ class RankedContact:
     domain_mail_status: str = ""
     domain_mail_detail: str = ""
     deep_recovery_sources: str = ""
+    zoominfo_email_availability: str = "Unknown"
+    zoominfo_email_availability_detail: str = ""
+    zoominfo_enrichment_attempted: bool = False
+    zoominfo_enrichment_result: str = ""
+    zoominfo_outer_record_id: str = ""
+    zoominfo_person_id_source: str = ""
+    zoominfo_match_status: str = ""
+    zoominfo_retry_message: str = ""
+    zoominfo_enriched_company_id: str = ""
+    zoominfo_enrichment_warnings: str = ""
 
 
 @dataclass
@@ -2668,6 +2710,14 @@ class ReviewQueueItem:
     contact_domain_mail_status: str
     contact_domain_mail_detail: str
     contact_deep_recovery_sources: str
+    contact_zoominfo_email_availability: str
+    contact_zoominfo_email_availability_detail: str
+    contact_zoominfo_enrichment_attempted: bool
+    contact_zoominfo_enrichment_result: str
+    contact_zoominfo_match_status: str
+    contact_zoominfo_retry_message: str
+    contact_zoominfo_enriched_company_id: str
+    contact_zoominfo_enrichment_warnings: str
     recommended_strategy: str
     outreach_confidence: int
     subject_line: str
@@ -4190,6 +4240,78 @@ def records_from_payload(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
+
+ZOOMINFO_EMAIL_AVAILABLE_KEYS = {
+    "hasemail", "emailavailable", "isemailavailable",
+    "hasbusinessemail", "businessemailavailable",
+    "isbusinessemailavailable", "emailisavailable",
+}
+ZOOMINFO_EMAIL_STATUS_KEYS = {
+    "emailstatus", "emailavailability", "emailavailabilitystatus",
+    "businessemailstatus", "contactemailstatus",
+}
+
+
+def zoominfo_email_availability(record: dict[str, Any]) -> tuple[str, str]:
+    """Inspect non-enriched ZoomInfo data without consuming a credit."""
+    if not isinstance(record, dict):
+        return "Unknown", "No structured ZoomInfo record was available."
+
+    email = str(first_value(
+        record, ["email", "businessEmail", "emailAddress"], ""
+    ) or "").strip()
+    if email:
+        return "Available", "ZoomInfo returned the email in the search result."
+
+    evidence: list[str] = []
+
+    def walk(value: Any, path: str = "") -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
+                child_path = f"{path}.{key}" if path else str(key)
+                if (
+                    normalized in ZOOMINFO_EMAIL_AVAILABLE_KEYS
+                    or normalized in ZOOMINFO_EMAIL_STATUS_KEYS
+                ):
+                    evidence.append(f"{child_path}={str(child).strip()}")
+                walk(child, child_path)
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                walk(child, f"{path}[{index}]")
+
+    walk(record)
+    positive = {"true", "yes", "available", "verified", "1"}
+    negative = {"false", "no", "unavailable", "not available", "0"}
+
+    for item in evidence:
+        value = item.split("=", 1)[-1].strip().lower()
+        if value in positive or "email available" in value:
+            return "Available", "ZoomInfo availability evidence: " + item
+    for item in evidence:
+        value = item.split("=", 1)[-1].strip().lower()
+        if value in negative or "email unavailable" in value or "no email" in value:
+            return "Unavailable", "ZoomInfo availability evidence: " + item
+
+    blob = text_blob(record).lower()
+    if any(p in blob for p in [
+        "verified email available", "business email available",
+        "email is available",
+    ]):
+        return "Available", "ZoomInfo metadata indicates an email is available."
+    if any(p in blob for p in [
+        "no email available", "email unavailable",
+        "business email unavailable",
+    ]):
+        return "Unavailable", "ZoomInfo metadata indicates no email is available."
+
+    return (
+        "Unknown",
+        "ZoomInfo search results did not expose a definitive email-availability flag.",
+    )
+
+
+
 def company_from_record(record: dict[str, Any]) -> Prospect:
     attrs = record.get("attributes", record) if isinstance(record, dict) else {}
     company_id = record.get("id", "") if isinstance(record, dict) else ""
@@ -4209,11 +4331,226 @@ def company_from_record(record: dict[str, Any]) -> Prospect:
     )
 
 
+
+EMAIL_FIELD_NAMES = {
+    "email", "emailaddress", "businessemail", "workemail",
+    "primaryemail", "verifiedemail", "professionalemail",
+    "contactemail", "personemail",
+}
+
+
+def collect_email_diagnostics(value: Any, path: str = "") -> list[dict[str, str]]:
+    found: list[dict[str, str]] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}" if path else str(key)
+            normalized = re.sub(r"[^a-z0-9]", "", str(key).lower())
+            if normalized in EMAIL_FIELD_NAMES:
+                found.append({
+                    "path": child_path,
+                    "field": str(key),
+                    "value": str(child or "").strip(),
+                })
+            found.extend(collect_email_diagnostics(child, child_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            found.extend(
+                collect_email_diagnostics(child, f"{path}[{index}]")
+            )
+    return found
+
+
+def recursive_email_value(value: Any) -> tuple[str, str]:
+    for candidate in collect_email_diagnostics(value):
+        email = candidate["value"].strip()
+        if re.fullmatch(
+            r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}",
+            email,
+            re.I,
+        ):
+            return email, candidate["path"]
+    try:
+        blob = json.dumps(value, default=str)
+    except Exception:
+        blob = str(value)
+    match = re.search(
+        r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}",
+        blob,
+        re.I,
+    )
+    return (match.group(0), "payload_text_scan") if match else ("", "")
+
+
+
+def normalize_contact_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def enrichment_result_records(payload: Any) -> list[dict[str, Any]]:
+    """
+    Return successful contact enrichment result objects from payloads like:
+    {"contact_1": {"success": true, "data": {...}}}
+    """
+    records: list[dict[str, Any]] = []
+    if not isinstance(payload, dict):
+        return records
+
+    for value in payload.values():
+        if not isinstance(value, dict):
+            continue
+        if value.get("success") is True and isinstance(value.get("data"), dict):
+            records.append(value["data"])
+        elif isinstance(value.get("data"), dict):
+            data = value["data"]
+            if data.get("success") is True:
+                records.append(data)
+    return records
+
+
+def best_enrichment_record(
+    payload: Any,
+    contact: RankedContact,
+) -> dict[str, Any]:
+    records = enrichment_result_records(payload)
+    if not records:
+        return {}
+
+    target_first = normalize_contact_name(contact.first_name)
+    target_last = normalize_contact_name(contact.last_name)
+    target_company = normalize_contact_name(contact.company_name)
+    target_title = normalize_contact_name(contact.title)
+
+    def score(record: dict[str, Any]) -> int:
+        points = 0
+        if normalize_contact_name(record.get("firstName", "")) == target_first:
+            points += 4
+        if normalize_contact_name(record.get("lastName", "")) == target_last:
+            points += 4
+        if normalize_contact_name(record.get("companyName", "")) == target_company:
+            points += 3
+        if normalize_contact_name(
+            record.get("jobTitle", record.get("title", ""))
+        ) == target_title:
+            points += 2
+        if str(record.get("matchStatus", "")).upper() == "FULL_MATCH":
+            points += 5
+        if record.get("email"):
+            points += 5
+        return points
+
+    return max(records, key=score)
+
+
+def apply_enrichment_record(
+    contact: RankedContact,
+    record: dict[str, Any],
+) -> None:
+    if not record:
+        return
+
+    email = str(record.get("email", "") or "").strip()
+    mobile = str(record.get("mobilePhone", "") or "").strip()
+    phone = str(record.get("phone", "") or "").strip()
+    company_id = str(
+        record.get("zoominfoCompanyId", record.get("companyId", "")) or ""
+    ).strip()
+    match_status = str(record.get("matchStatus", "") or "").strip()
+    retry_info = record.get("retryInfo", {})
+    warnings = record.get("warnings", [])
+
+    if email:
+        contact.email = email
+        contact.email_status = "ZoomInfo enrichment returned"
+        contact.email_confidence = 99 if match_status == "FULL_MATCH" else 96
+        contact.email_verification_status = "ZoomInfo Enriched"
+        contact.email_recovery_method = (
+            "ZoomInfo identity-field enrichment "
+            f"({match_status or 'matched'})"
+        )
+
+    if mobile:
+        contact.mobile_phone = mobile
+        contact.phone_status = "ZoomInfo enrichment returned"
+        contact.phone_confidence = 96
+    elif phone:
+        contact.direct_phone = phone
+        contact.phone_status = "ZoomInfo enrichment returned"
+        contact.phone_confidence = 94
+
+    if company_id:
+        contact.zoominfo_enriched_company_id = company_id
+
+    contact.zoominfo_match_status = match_status
+    contact.zoominfo_retry_message = str(
+        retry_info.get("message", "") if isinstance(retry_info, dict) else ""
+    )
+    contact.zoominfo_enrichment_warnings = (
+        json.dumps(warnings, default=str)
+        if warnings
+        else ""
+    )
+    contact.zoominfo_enrichment_result = (
+        "Verified email recovered"
+        if email
+        else "Contact enriched but no email returned"
+    )
+
+
+
+def classify_enrichment_failure(
+    payload: Any,
+    *,
+    person_id: str,
+    extracted_email: str,
+) -> str:
+    if extracted_email:
+        return "Email recovered"
+    blob = text_blob(payload).lower()
+    if any(term in blob for term in [
+        "not entitled", "entitlement", "permission denied",
+        "forbidden", "unauthorized",
+    ]):
+        return "ZoomInfo entitlement or permission issue"
+    if any(term in blob for term in [
+        "rate limit", "too many requests", "throttl",
+    ]):
+        return "ZoomInfo rate limit"
+    if any(term in blob for term in [
+        "invalid person id",
+        "invalid personid",
+        "invalid contact id",
+        "contact not found",
+        "person not found",
+        "no matching contact",
+        "unable to match contact",
+    ]):
+        return f"Invalid or unmatched ZoomInfo person ID: {person_id}"
+    if not records_from_payload(payload):
+        return "Enrichment returned no contact records"
+    return "Enrichment returned a contact record but no email field"
+
+
+
 def contact_from_record(record: dict[str, Any], company: Prospect) -> RankedContact:
     attrs = record.get("attributes", record) if isinstance(record, dict) else {}
     company_obj = attrs.get("company", {}) if isinstance(attrs, dict) else {}
     contact_id = record.get("id", "") if isinstance(record, dict) else ""
-    return RankedContact(
+
+    direct_email = str(
+        first_value(
+            attrs,
+            [
+                "email", "businessEmail", "emailAddress", "workEmail",
+                "primaryEmail", "verifiedEmail", "professionalEmail",
+            ],
+            "",
+        )
+        or ""
+    ).strip()
+    recursive_email, recursive_path = recursive_email_value(record)
+    email = direct_email or recursive_email
+
+    contact = RankedContact(
         company_id=str(
             first_value(attrs, ["companyId", "zoominfoCompanyId"], "")
             or company_obj.get("id", "")
@@ -4225,15 +4562,48 @@ def contact_from_record(record: dict[str, Any], company: Prospect) -> RankedCont
             or company.company_name
         ),
         contact_id=str(
-            contact_id or first_value(attrs, ["contactId", "personId", "zoominfoContactId"], "")
+            first_value(
+                attrs,
+                [
+                    "personId",
+                    "contactId",
+                    "zoominfoContactId",
+                    "zoomInfoContactId",
+                    "id",
+                ],
+                "",
+            )
+            or contact_id
         ),
-        first_name=str(first_value(attrs, ["firstName"], "")),
-        last_name=str(first_value(attrs, ["lastName"], "")),
+        first_name=str(
+            first_value(
+                attrs,
+                ["firstName", "givenName", "preferredFirstName"],
+                "",
+            )
+        ),
+        last_name=str(
+            first_value(attrs, ["lastName", "surname", "familyName"], "")
+        ),
         title=str(first_value(attrs, ["jobTitle", "title"], "")),
-        email=str(first_value(attrs, ["email", "businessEmail", "emailAddress"], "")),
-        direct_phone=str(first_value(attrs, ["phone", "directPhone", "directDial"], "")),
-        mobile_phone=str(first_value(attrs, ["mobilePhone", "mobile"], "")),
-        linkedin_url=str(first_value(attrs, ["linkedInUrl", "linkedin", "linkedinUrl", "externalUrls"], "")),
+        email=email,
+        direct_phone=str(
+            first_value(
+                attrs,
+                ["phone", "directPhone", "directDial", "businessPhone"],
+                "",
+            )
+        ),
+        mobile_phone=str(
+            first_value(attrs, ["mobilePhone", "mobile", "cellPhone"], "")
+        ),
+        linkedin_url=str(
+            first_value(
+                attrs,
+                ["linkedInUrl", "linkedin", "linkedinUrl", "externalUrls"],
+                "",
+            )
+        ),
         crm_excluded=crm_linked(record),
         rank="",
         contact_score=0,
@@ -4244,14 +4614,63 @@ def contact_from_record(record: dict[str, Any], company: Prospect) -> RankedCont
         recommendation_confidence="",
         source_type="ZoomInfo",
         source_url="",
-        email_status=("ZoomInfo returned" if first_value(attrs, ["email", "businessEmail", "emailAddress"], "") else "Missing"),
-        phone_status=("ZoomInfo returned" if first_value(attrs, ["phone", "directPhone", "directDial", "mobilePhone", "mobile"], "") else "Missing"),
-        email_confidence=(95 if first_value(attrs, ["email", "businessEmail", "emailAddress"], "") else 0),
-        phone_confidence=(92 if first_value(attrs, ["phone", "directPhone", "directDial", "mobilePhone", "mobile"], "") else 0),
+        email_status=("ZoomInfo returned" if email else "Missing"),
+        phone_status=(
+            "ZoomInfo returned"
+            if first_value(
+                attrs,
+                [
+                    "phone", "directPhone", "directDial",
+                    "mobilePhone", "mobile",
+                ],
+                "",
+            )
+            else "Missing"
+        ),
+        email_confidence=(98 if email else 0),
+        phone_confidence=(
+            92
+            if first_value(
+                attrs,
+                [
+                    "phone", "directPhone", "directDial",
+                    "mobilePhone", "mobile",
+                ],
+                "",
+            )
+            else 0
+        ),
         decision_maker_confidence=0,
         public_company_phone="",
         predicted_email_pattern="",
     )
+    contact.zoominfo_outer_record_id = str(contact_id or "")
+    actual_person_id = str(
+        first_value(
+            attrs,
+            [
+                "personId",
+                "contactId",
+                "zoominfoContactId",
+                "zoomInfoContactId",
+                "id",
+            ],
+            "",
+        )
+        or ""
+    )
+    contact.zoominfo_person_id_source = (
+        "attributes.personId/contactId"
+        if actual_person_id
+        else "outer MCP record id fallback"
+    )
+
+    if email and recursive_path:
+        contact.email_recovery_method = (
+            f"ZoomInfo nested field extraction: {recursive_path}"
+        )
+        contact.email_verification_status = "ZoomInfo Returned"
+    return contact
 
 
 def score_contact(contact: RankedContact) -> tuple[float, list[str]]:
@@ -5664,7 +6083,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 7.0",
+            text="VERSION 7.8",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -5894,7 +6313,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 7.0",
+            text="Darwill Compass 7.8",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -6017,6 +6436,7 @@ class App(tk.Tk):
         self.employee_max = tk.IntVar(value=1000)
         self.exclude_crm = tk.BooleanVar(value=True)
         self.enrich_final_contacts = tk.BooleanVar(value=False)
+        self.smart_email_enrichment = tk.BooleanVar(value=True)
         self.use_zoominfo_ai_research = tk.BooleanVar(value=False)
         self.skip_history = tk.BooleanVar(value=True)
         self.resume_checkpoint = tk.BooleanVar(value=True)
@@ -6254,6 +6674,12 @@ class App(tk.Tk):
             style="Secondary.TButton",
             command=self._toggle_connection_manager,
         ).pack(side="right")
+        ttk.Button(
+            connection_summary,
+            text="Open MCP Explorer",
+            style="Blue.TButton",
+            command=self._open_mcp_explorer,
+        ).pack(side="right", padx=(0, 8))
 
         self.credentials_panel = ttk.Frame(
             connections,
@@ -6718,7 +7144,18 @@ class App(tk.Tk):
         )
         ttk.Checkbutton(
             credit_options,
-            text="Enrich final contacts for email and business phone",
+            text=(
+                "Smart email enrichment: check ZoomInfo availability and "
+                "spend only when an email is indicated"
+            ),
+            variable=self.smart_email_enrichment,
+        ).pack(anchor="w", pady=3)
+        ttk.Checkbutton(
+            credit_options,
+            text=(
+                "Legacy bulk enrichment: enrich final contacts even when "
+                "availability is unknown"
+            ),
             variable=self.enrich_final_contacts,
         ).pack(anchor="w", pady=3)
         ttk.Checkbutton(
@@ -6729,8 +7166,10 @@ class App(tk.Tk):
         ttk.Label(
             credit_options,
             text=(
-                "These are off by default because they may consume "
-                "ZoomInfo bulk-data or AI credits."
+                "Smart enrichment is on by default and only submits contacts "
+                "whose raw ZoomInfo results indicate email availability. "
+                "Legacy bulk enrichment remains off because it may spend "
+                "credits without a confirmed email gain."
             ),
             style="Card.TLabel",
             foreground=WARNING,
@@ -7522,6 +7961,59 @@ class App(tk.Tk):
             value="Phone quality and source status"
         )
 
+        workflow_bar = tk.Frame(
+            review_frame,
+            bg="#EAF3FB",
+            highlightthickness=1,
+            highlightbackground=BORDER,
+            padx=10,
+            pady=8,
+        )
+        workflow_bar.pack(fill="x", pady=(0, 8))
+
+        tk.Label(
+            workflow_bar,
+            text="COMPANY WORKFLOW",
+            bg="#EAF3FB",
+            fg=NAVY,
+            font=("Segoe UI Semibold", 8),
+        ).pack(side="left", padx=(0, 10))
+
+        ttk.Button(
+            workflow_bar,
+            text="Approve Company",
+            style="Primary.TButton",
+            command=self._approve_selected_company,
+        ).pack(side="left")
+
+        ttk.Button(
+            workflow_bar,
+            text="Needs Verification",
+            style="Secondary.TButton",
+            command=self._mark_selected_company_for_verification,
+        ).pack(side="left", padx=(8, 0))
+
+        ttk.Button(
+            workflow_bar,
+            text="Reject Company",
+            style="Secondary.TButton",
+            command=self._reject_selected_company,
+        ).pack(side="left", padx=(8, 0))
+
+        ttk.Button(
+            workflow_bar,
+            text="Preview Email",
+            style="Secondary.TButton",
+            command=self._show_email_review_tab,
+        ).pack(side="right")
+
+        ttk.Button(
+            workflow_bar,
+            text="Sync Company to HubSpot",
+            style="Primary.TButton",
+            command=self._sync_selected_company_to_hubspot,
+        ).pack(side="right", padx=(0, 8))
+
         summary_card = tk.Frame(
             review_frame,
             bg=SURFACE,
@@ -8270,6 +8762,18 @@ class App(tk.Tk):
             ),
             style="Muted.TLabel",
         ).pack(side="left", padx=(10, 0))
+        ttk.Button(
+            acquisition_header,
+            text="Retry ZoomInfo Email",
+            command=self._retry_selected_contact_enrichment,
+            style="Primary.TButton",
+        ).pack(side="right")
+        ttk.Button(
+            acquisition_header,
+            text="MCP Explorer",
+            command=self._open_mcp_explorer,
+            style="Secondary.TButton",
+        ).pack(side="right", padx=(0, 8))
 
         self.contact_acquisition_text = tk.Text(
             acquisition_tab,
@@ -8294,18 +8798,6 @@ class App(tk.Tk):
             style="Secondary.TButton",
             command=self._save_queue_edits,
         ).pack(side="left")
-        ttk.Button(
-            review_actions,
-            text="Approve",
-            style="Primary.TButton",
-            command=lambda: self._set_queue_status("Approved"),
-        ).pack(side="left", padx=(8, 0))
-        ttk.Button(
-            review_actions,
-            text="Reject",
-            style="Secondary.TButton",
-            command=lambda: self._set_queue_status("Rejected"),
-        ).pack(side="left", padx=(8, 0))
         ttk.Button(
             review_actions,
             text="View Contact Intelligence",
@@ -9639,6 +10131,7 @@ class App(tk.Tk):
                 self.employee_max.set(data.get("employee_max", 1000))
                 self.exclude_crm.set(data.get("exclude_crm", True))
                 self.enrich_final_contacts.set(data.get("enrich_final_contacts", False))
+                self.smart_email_enrichment.set(data.get("smart_email_enrichment", True))
                 self.use_zoominfo_ai_research.set(data.get("use_zoominfo_ai_research", False))
                 self.skip_history.set(data.get("skip_history", True))
                 self.resume_checkpoint.set(data.get("resume_checkpoint", True))
@@ -9722,6 +10215,7 @@ class App(tk.Tk):
             "employee_max": self.employee_max.get(),
             "exclude_crm": self.exclude_crm.get(),
             "enrich_final_contacts": self.enrich_final_contacts.get(),
+            "smart_email_enrichment": self.smart_email_enrichment.get(),
             "use_zoominfo_ai_research": self.use_zoominfo_ai_research.get(),
             "skip_history": self.skip_history.get(),
             "resume_checkpoint": self.resume_checkpoint.get(),
@@ -10823,6 +11317,44 @@ class App(tk.Tk):
             acquisition_report
             + "\n\n"
             + format_email_intelligence_report(email_intelligence)
+            + "\n\nZOOMINFO AVAILABILITY CHECK\n\n"
+            + "Availability: "
+            + item.contact_zoominfo_email_availability
+            + "\nEvidence: "
+            + (
+                item.contact_zoominfo_email_availability_detail
+                or "No definitive availability detail returned."
+            )
+            + "\nEnrichment attempted: "
+            + (
+                "YES"
+                if item.contact_zoominfo_enrichment_attempted
+                else "NO"
+            )
+            + "\nEnrichment result: "
+            + (
+                item.contact_zoominfo_enrichment_result
+                or "No enrichment attempted."
+            )
+            + "\nDiagnostic log folder: "
+            + str(LOG_DIR / "email_diagnostics")
+            + "\nUnknown availability policy: enrich only the highest-ranked "
+            + "missing-email contact, not every finalist."
+            + "\nEnrichment matching policy: use first name, last name, "
+            + "company name, and job title first. Person ID is no longer "
+            + "required for the initial enrichment attempt."
+            + "\nMatch status: "
+            + (item.contact_zoominfo_match_status or "Not recorded")
+            + "\nZoomInfo enriched company ID: "
+            + (
+                item.contact_zoominfo_enriched_company_id
+                or "Not recorded"
+            )
+            + "\nZoomInfo retry message: "
+            + (
+                item.contact_zoominfo_retry_message
+                or "Not recorded"
+            )
         )
         self.contact_acquisition_text.insert(
             "1.0",
@@ -10831,6 +11363,1124 @@ class App(tk.Tk):
         item.contact_decision_confidence = decision_confidence
         save_outreach_queue(self.review_queue)
         self._populate_delivery_item(item)
+
+    def _retry_selected_contact_enrichment(self):
+        """
+        Enrich an existing Deal Desk contact without rerunning Discovery.
+
+        Updates the current queue item and preserves duplicate protection.
+        """
+        queue_id = self.review_queue_id.get()
+        item = self._queue_item_by_id(queue_id)
+        if not item:
+            messagebox.showinfo(
+                APP_TITLE,
+                "Select a contact in Deal Desk first.",
+            )
+            return
+
+        if item.contact_email:
+            if not messagebox.askyesno(
+                APP_TITLE,
+                (
+                    f"{item.contact_name} already has "
+                    f"{item.contact_email}.\n\nRetry ZoomInfo anyway?"
+                ),
+            ):
+                return
+
+        first_name = item.contact_first_name.strip()
+        last_name = item.contact_last_name.strip()
+        if not first_name and item.contact_name:
+            first_name = item.contact_name.split(" ", 1)[0]
+        if not last_name and " " in item.contact_name:
+            last_name = item.contact_name.split(" ", 1)[1]
+
+        if not item.contact_id and not (first_name and last_name):
+            messagebox.showerror(
+                APP_TITLE,
+                (
+                    "Compass needs a ZoomInfo person ID or the contact's "
+                    "first and last name."
+                ),
+            )
+            return
+
+        try:
+            logger = lambda msg: None
+            oauth = OAuthManager(
+                self.client_id.get(),
+                self.client_secret.get(),
+                logger,
+            )
+            token = oauth.get_access_token()
+            mcp = ZoomInfoMCP(token, logger)
+            tools = mcp.run(mcp.discover())
+            if "enrich_contacts" not in tools:
+                raise RuntimeError(
+                    "ZoomInfo MCP does not expose enrich_contacts."
+                )
+
+            contact_payload = {
+                "firstName": first_name,
+                "lastName": last_name,
+                "companyName": item.company_name,
+                "jobTitle": item.contact_title,
+            }
+
+            enrich_payload = {
+                "contacts": [contact_payload],
+                "requiredFields": [
+                    "firstName",
+                    "lastName",
+                    "email",
+                    "phone",
+                    "mobilePhone",
+                    "directPhoneDoNotCall",
+                    "mobilePhoneDoNotCall",
+                    "jobTitle",
+                    "jobFunction",
+                    "managementLevel",
+                    "externalUrls",
+                    "contactAccuracyScore",
+                    "zoominfoCompanyId",
+                    "companyName",
+                ],
+                "userIntent": (
+                    "Replay enrichment for one existing Darwill Deal Desk "
+                    "contact. Return the verified business email when "
+                    "available. Match by first name, last name, company "
+                    "name, and job title. Do not require a person ID."
+                ),
+            }
+
+            diagnostics_root = LOG_DIR / "email_diagnostics"
+            diagnostics_root.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            slug = re.sub(
+                r"[^a-z0-9]+",
+                "_",
+                f"{item.company_name}_{item.contact_name}".lower(),
+            ).strip("_")
+            batch_dir = diagnostics_root / f"{stamp}_{slug}_replay"
+            batch_dir.mkdir(parents=True, exist_ok=True)
+
+            (batch_dir / "enrich_tool_schema.json").write_text(
+                json.dumps(
+                    tools.get("enrich_contacts", {}),
+                    indent=2,
+                    default=str,
+                ),
+                encoding="utf-8",
+            )
+            (batch_dir / "enrich_request.json").write_text(
+                json.dumps(enrich_payload, indent=2, default=str),
+                encoding="utf-8",
+            )
+
+            self.status.set(
+                f"Retrying ZoomInfo email for {item.contact_name}..."
+            )
+            self.update_idletasks()
+
+            response = mcp.run(
+                mcp.call("enrich_contacts", enrich_payload)
+            )
+            (batch_dir / "enrich_response.json").write_text(
+                json.dumps(response, indent=2, default=str),
+                encoding="utf-8",
+            )
+
+            temp_contact = RankedContact(
+                company_id=str(item.company_id or ""),
+                company_name=item.company_name,
+                contact_id=str(item.contact_id or ""),
+                first_name=first_name,
+                last_name=last_name,
+                title=item.contact_title,
+                email="",
+                direct_phone="",
+                mobile_phone="",
+                linkedin_url="",
+                crm_excluded=False,
+                rank="",
+                contact_score=0,
+                recommendation_reason="",
+                live_research_summary="",
+                research_sources="",
+                contact_data_status="",
+                recommendation_confidence="",
+                source_type="ZoomInfo",
+                source_url="",
+                email_status="Missing",
+                phone_status="Missing",
+                email_confidence=0,
+                phone_confidence=0,
+                decision_maker_confidence=0,
+                public_company_phone="",
+                predicted_email_pattern="",
+            )
+            result_record = best_enrichment_record(
+                response,
+                temp_contact,
+            )
+            if result_record:
+                apply_enrichment_record(
+                    temp_contact,
+                    result_record,
+                )
+
+            email = temp_contact.email
+            email_path = (
+                "contact_*.data.email"
+                if email
+                else recursive_email_value(response)[1]
+            )
+            email_fields = collect_email_diagnostics(response)
+            classification = classify_enrichment_failure(
+                response,
+                person_id=str(item.contact_id or ""),
+                extracted_email=email,
+            )
+
+            lines = [
+                f"Contact: {item.contact_name}",
+                f"Title: {item.contact_title}",
+                f"Company: {item.company_name}",
+                f"Stored ZoomInfo person ID: {item.contact_id or '<none>'}",
+                "Replay enrichment called: YES",
+                f"Email returned: {email or 'NO'}",
+                f"Email source path: {email_path or '<none>'}",
+                f"Result classification: {classification}",
+                f"Match status: {temp_contact.zoominfo_match_status or '<none>'}",
+                (
+                    "ZoomInfo company ID: "
+                    f"{temp_contact.zoominfo_enriched_company_id or '<none>'}"
+                ),
+                (
+                    "Retry message: "
+                    f"{temp_contact.zoominfo_retry_message or '<none>'}"
+                ),
+                (
+                    "Warnings: "
+                    f"{temp_contact.zoominfo_enrichment_warnings or '<none>'}"
+                ),
+                "Email-related response fields:",
+            ]
+            lines.extend(
+                [
+                    f"{field['path']}={field['value'] or '<empty>'}"
+                    for field in email_fields
+                ]
+                or ["<none found>"]
+            )
+            (batch_dir / "diagnostic_summary.txt").write_text(
+                "\n".join(lines),
+                encoding="utf-8",
+            )
+
+            item.contact_zoominfo_enrichment_attempted = True
+            item.contact_zoominfo_enrichment_result = classification
+            item.updated_at = now_iso()
+
+            if email:
+                item.contact_email = email
+                item.contact_email_status = "ZoomInfo replay returned"
+                item.contact_email_confidence = (
+                    temp_contact.email_confidence or 98
+                )
+                item.contact_email_verification_status = (
+                    "ZoomInfo Enriched"
+                )
+                item.contact_email_recovery_method = (
+                    f"Deal Desk replay: {email_path}"
+                )
+                item.contact_data_status = "Email recovered"
+
+            if temp_contact.mobile_phone:
+                item.contact_phone = temp_contact.mobile_phone
+                item.contact_phone_status = "ZoomInfo replay returned"
+                item.contact_phone_confidence = (
+                    temp_contact.phone_confidence or 96
+                )
+            elif temp_contact.direct_phone:
+                item.contact_phone = temp_contact.direct_phone
+                item.contact_phone_status = "ZoomInfo replay returned"
+                item.contact_phone_confidence = (
+                    temp_contact.phone_confidence or 94
+                )
+
+            item.contact_zoominfo_match_status = (
+                temp_contact.zoominfo_match_status
+            )
+            item.contact_zoominfo_retry_message = (
+                temp_contact.zoominfo_retry_message
+            )
+            item.contact_zoominfo_enriched_company_id = (
+                temp_contact.zoominfo_enriched_company_id
+            )
+            item.contact_zoominfo_enrichment_warnings = (
+                temp_contact.zoominfo_enrichment_warnings
+            )
+
+            save_outreach_queue(self.review_queue)
+            self._refresh_deal_desk()
+            if self.deal_tree.exists(queue_id):
+                self.deal_tree.selection_set(queue_id)
+                self.deal_tree.see(queue_id)
+                self._load_selected_queue_item()
+
+            if email:
+                self.status.set(
+                    f"Recovered {email} for {item.contact_name}."
+                )
+                messagebox.showinfo(
+                    APP_TITLE,
+                    (
+                        f"ZoomInfo returned:\n\n{email}\n\n"
+                        f"Diagnostics:\n{batch_dir}"
+                    ),
+                )
+            else:
+                self.status.set(
+                    f"ZoomInfo returned no email for {item.contact_name}."
+                )
+                messagebox.showwarning(
+                    APP_TITLE,
+                    (
+                        "ZoomInfo enrichment ran but returned no email.\n\n"
+                        f"Result: {classification}\n\n"
+                        f"Diagnostics:\n{batch_dir}"
+                    ),
+                )
+        except Exception as exc:
+            self.status.set("Replay enrichment failed.")
+            try:
+                if "batch_dir" in locals():
+                    (batch_dir / "enrichment_error.txt").write_text(
+                        str(exc),
+                        encoding="utf-8",
+                    )
+            except Exception:
+                pass
+            messagebox.showerror(
+                APP_TITLE,
+                f"Replay enrichment failed:\n\n{exc}",
+            )
+
+
+    def _mcp_explorer_connection(self):
+        logger = lambda message: None
+        oauth = OAuthManager(
+            self.client_id.get(),
+            self.client_secret.get(),
+            logger,
+        )
+        token = oauth.get_access_token()
+        return ZoomInfoMCP(token, logger)
+
+    @staticmethod
+    def _mcp_schema_for_tool(tool_value):
+        if isinstance(tool_value, dict):
+            return tool_value
+        result = {}
+        for attribute in (
+            "name",
+            "description",
+            "inputSchema",
+            "input_schema",
+            "schema",
+        ):
+            value = getattr(tool_value, attribute, None)
+            if value is not None:
+                result[attribute] = value
+        return result or {"value": str(tool_value)}
+
+    def _open_mcp_explorer(self):
+        # Self-contained developer window. Do not depend on Compass theme
+        # constants because older workspaces may not define the same names.
+        explorer_bg = "#F4F6F8"
+        explorer_navy = "#0B2D4F"
+        explorer_white = "#FFFFFF"
+        explorer_muted = "#CFE3F6"
+
+        explorer = tk.Toplevel(self)
+        explorer.title("ZoomInfo MCP Explorer")
+        explorer.geometry("1250x780")
+        explorer.minsize(980, 620)
+        explorer.configure(bg=explorer_bg)
+        explorer.transient(self)
+
+        header = tk.Frame(explorer, bg=explorer_navy, padx=18, pady=14)
+        header.pack(fill="x")
+        tk.Label(
+            header,
+            text="ZOOMINFO DEVELOPER TOOLS",
+            bg=explorer_navy,
+            fg="#75B6F5",
+            font=("Segoe UI Semibold", 8),
+        ).pack(anchor="w")
+        tk.Label(
+            header,
+            text="MCP Explorer",
+            bg=explorer_navy,
+            fg=explorer_white,
+            font=("Segoe UI Semibold", 20),
+        ).pack(anchor="w", pady=(2, 2))
+        tk.Label(
+            header,
+            text=(
+                "Inspect the exact tools and schemas exposed by your "
+                "ZoomInfo MCP connection. Test one tool at a time without "
+                "rerunning Discovery."
+            ),
+            bg=explorer_navy,
+            fg=explorer_muted,
+            font=("Segoe UI", 10),
+        ).pack(anchor="w")
+
+        toolbar = ttk.Frame(explorer, padding=(14, 12))
+        toolbar.pack(fill="x")
+        status_var = tk.StringVar(value="Not connected")
+        ttk.Button(
+            toolbar,
+            text="Connect and Load Tools",
+            style="TButton",
+            command=lambda: load_tools(),
+        ).pack(side="left")
+        ttk.Button(
+            toolbar,
+            text="Save Explorer Session",
+            style="TButton",
+            command=lambda: save_session(),
+        ).pack(side="left", padx=(8, 0))
+        ttk.Label(
+            toolbar,
+            textvariable=status_var,
+            style="TLabel",
+        ).pack(side="left", padx=(12, 0))
+
+        body = ttk.Panedwindow(explorer, orient="horizontal")
+        body.pack(fill="both", expand=True, padx=14, pady=(0, 14))
+
+        left = ttk.Frame(body, padding=8)
+        middle = ttk.Frame(body, padding=8)
+        right = ttk.Frame(body, padding=8)
+        body.add(left, weight=1)
+        body.add(middle, weight=2)
+        body.add(right, weight=2)
+
+        ttk.Label(
+            left,
+            text="Available Tools",
+            style="TLabel",
+        ).pack(anchor="w", pady=(0, 6))
+        tool_filter_var = tk.StringVar()
+        filter_entry = ttk.Entry(
+            left,
+            textvariable=tool_filter_var,
+        )
+        filter_entry.pack(fill="x", pady=(0, 6))
+
+        tool_list = tk.Listbox(
+            left,
+            exportselection=False,
+            font=("Consolas", 10),
+        )
+        tool_list.pack(fill="both", expand=True)
+
+        ttk.Label(
+            middle,
+            text="Tool Schema",
+            style="TLabel",
+        ).pack(anchor="w", pady=(0, 6))
+        schema_text = tk.Text(
+            middle,
+            wrap="none",
+            font=("Consolas", 9),
+            undo=False,
+        )
+        schema_text.pack(fill="both", expand=True)
+
+        ttk.Label(
+            right,
+            text="Request and Response",
+            style="TLabel",
+        ).pack(anchor="w", pady=(0, 6))
+
+        request_frame = ttk.LabelFrame(
+            right,
+            text="Request JSON",
+            padding=6,
+        )
+        request_frame.pack(fill="both", expand=True)
+        request_text = tk.Text(
+            request_frame,
+            wrap="none",
+            font=("Consolas", 9),
+            height=13,
+        )
+        request_text.pack(fill="both", expand=True)
+
+        action_bar = ttk.Frame(right)
+        action_bar.pack(fill="x", pady=8)
+        ttk.Button(
+            action_bar,
+            text="Load Sample Request",
+            style="TButton",
+            command=lambda: load_sample_request(),
+        ).pack(side="left")
+        ttk.Button(
+            action_bar,
+            text="Run Selected Tool",
+            style="TButton",
+            command=lambda: run_selected_tool(),
+        ).pack(side="left", padx=(8, 0))
+
+        response_frame = ttk.LabelFrame(
+            right,
+            text="Raw Response",
+            padding=6,
+        )
+        response_frame.pack(fill="both", expand=True)
+        response_text = tk.Text(
+            response_frame,
+            wrap="none",
+            font=("Consolas", 9),
+            height=13,
+        )
+        response_text.pack(fill="both", expand=True)
+
+        state = {
+            "mcp": None,
+            "tools": {},
+            "visible_names": [],
+            "last_request": {},
+            "last_response": {},
+            "selected_tool": "",
+        }
+
+        def pretty(value):
+            return json.dumps(value, indent=2, default=str, sort_keys=True)
+
+        def selected_tool_name():
+            selection = tool_list.curselection()
+            if not selection:
+                return ""
+            index = selection[0]
+            if index >= len(state["visible_names"]):
+                return ""
+            return state["visible_names"][index]
+
+        def refresh_list(*_args):
+            query = tool_filter_var.get().strip().lower()
+            names = sorted(state["tools"].keys())
+            if query:
+                names = [name for name in names if query in name.lower()]
+            state["visible_names"] = names
+            tool_list.delete(0, "end")
+            for name in names:
+                tool_list.insert("end", name)
+            status_var.set(
+                f"{len(names)} shown / {len(state['tools'])} tools loaded"
+                if state["tools"]
+                else "Not connected"
+            )
+
+        def show_schema(_event=None):
+            name = selected_tool_name()
+            if not name:
+                return
+            state["selected_tool"] = name
+            schema = self._mcp_schema_for_tool(state["tools"][name])
+            schema_text.delete("1.0", "end")
+            schema_text.insert("1.0", pretty(schema))
+
+        def load_tools():
+            try:
+                status_var.set("Connecting to ZoomInfo MCP…")
+                explorer.update_idletasks()
+                mcp = self._mcp_explorer_connection()
+                tools = mcp.run(mcp.discover())
+                if not isinstance(tools, dict):
+                    raise RuntimeError(
+                        "MCP discovery returned an unexpected tool collection."
+                    )
+                state["mcp"] = mcp
+                state["tools"] = tools
+                refresh_list()
+                if state["visible_names"]:
+                    tool_list.selection_set(0)
+                    show_schema()
+                status_var.set(f"{len(tools)} MCP tools loaded")
+            except Exception as exc:
+                status_var.set("Connection failed")
+                messagebox.showerror(
+                    APP_TITLE,
+                    f"Could not load MCP tools:\n\n{exc}",
+                    parent=explorer,
+                )
+
+        def schema_properties(name):
+            tool = self._mcp_schema_for_tool(
+                state["tools"].get(name, {})
+            )
+            schema = (
+                tool.get("inputSchema")
+                or tool.get("input_schema")
+                or tool.get("schema")
+                or {}
+            )
+            return schema if isinstance(schema, dict) else {}
+
+        def load_sample_request():
+            name = selected_tool_name()
+            if not name:
+                messagebox.showinfo(
+                    APP_TITLE,
+                    "Select a tool first.",
+                    parent=explorer,
+                )
+                return
+
+            schema = schema_properties(name)
+            props = schema.get("properties", {})
+            required = schema.get("required", [])
+            sample = {}
+
+            def placeholder(field, definition):
+                field_lower = field.lower()
+                if field_lower in {"personid", "contactid"}:
+                    return "ZOOMINFO_PERSON_ID"
+                if field_lower in {"companyid", "zoominfocompanyid"}:
+                    return "ZOOMINFO_COMPANY_ID"
+                if field_lower == "firstname":
+                    return "Gabe"
+                if field_lower == "lastname":
+                    return "Garwick"
+                if field_lower in {"companyname", "company"}:
+                    return "Mr. Electric"
+                if field_lower in {"jobtitle", "title"}:
+                    return "Marketing Specialist"
+                if field_lower == "requiredfields":
+                    return [
+                        "firstName",
+                        "lastName",
+                        "email",
+                        "phone",
+                        "mobilePhone",
+                        "jobTitle",
+                        "companyName",
+                    ]
+                if field_lower == "contacts":
+                    return [{
+                        "firstName": "Gabe",
+                        "lastName": "Garwick",
+                        "companyName": "Mr. Electric",
+                        "jobTitle": "Marketing Specialist",
+                    }]
+                field_type = definition.get("type")
+                if field_type == "boolean":
+                    return True
+                if field_type in {"integer", "number"}:
+                    return 1
+                if field_type == "array":
+                    return []
+                if field_type == "object":
+                    return {}
+                return ""
+
+            for field in required:
+                definition = props.get(field, {})
+                sample[field] = placeholder(field, definition)
+
+            # Useful defaults for known ZoomInfo tools.
+            if name == "enrich_contacts":
+                sample = {
+                    "contacts": [{
+                        "firstName": "Gabe",
+                        "lastName": "Garwick",
+                        "companyName": "Mr. Electric",
+                        "jobTitle": "Marketing Specialist",
+                    }],
+                    "requiredFields": [
+                        "firstName",
+                        "lastName",
+                        "email",
+                        "phone",
+                        "mobilePhone",
+                        "jobTitle",
+                        "companyName",
+                    ],
+                    "userIntent": (
+                        "Test one existing ZoomInfo contact and return the "
+                        "verified business email when available."
+                    ),
+                }
+            elif name == "search_contacts":
+                sample.update({
+                    "firstName": "Gabe",
+                    "lastName": "Garwick",
+                    "companyName": "Mr. Electric",
+                })
+
+            request_text.delete("1.0", "end")
+            request_text.insert("1.0", pretty(sample))
+
+        def run_selected_tool():
+            name = selected_tool_name()
+            if not name:
+                messagebox.showinfo(
+                    APP_TITLE,
+                    "Select a tool first.",
+                    parent=explorer,
+                )
+                return
+            if state["mcp"] is None:
+                messagebox.showinfo(
+                    APP_TITLE,
+                    "Connect and load tools first.",
+                    parent=explorer,
+                )
+                return
+
+            raw = request_text.get("1.0", "end").strip()
+            try:
+                payload = json.loads(raw or "{}")
+            except json.JSONDecodeError as exc:
+                messagebox.showerror(
+                    APP_TITLE,
+                    f"Request JSON is invalid:\n\n{exc}",
+                    parent=explorer,
+                )
+                return
+
+            try:
+                status_var.set(f"Running {name}…")
+                explorer.update_idletasks()
+                response = state["mcp"].run(
+                    state["mcp"].call(name, payload)
+                )
+                state["last_request"] = payload
+                state["last_response"] = response
+                state["selected_tool"] = name
+                response_text.delete("1.0", "end")
+                response_text.insert("1.0", pretty(response))
+                status_var.set(f"{name} completed")
+
+                session_dir = LOG_DIR / "mcp_explorer"
+                session_dir.mkdir(parents=True, exist_ok=True)
+                stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                tool_dir = session_dir / f"{stamp}_{name}"
+                tool_dir.mkdir(parents=True, exist_ok=True)
+                (tool_dir / "tool_schema.json").write_text(
+                    schema_text.get("1.0", "end").strip(),
+                    encoding="utf-8",
+                )
+                (tool_dir / "request.json").write_text(
+                    pretty(payload),
+                    encoding="utf-8",
+                )
+                (tool_dir / "response.json").write_text(
+                    pretty(response),
+                    encoding="utf-8",
+                )
+                status_var.set(
+                    f"{name} completed — saved to {tool_dir}"
+                )
+            except Exception as exc:
+                status_var.set(f"{name} failed")
+                response_text.delete("1.0", "end")
+                response_text.insert(
+                    "1.0",
+                    pretty({
+                        "success": False,
+                        "tool": name,
+                        "error": str(exc),
+                    }),
+                )
+                messagebox.showerror(
+                    APP_TITLE,
+                    f"MCP tool failed:\n\n{exc}",
+                    parent=explorer,
+                )
+
+        def save_session():
+            session_dir = LOG_DIR / "mcp_explorer"
+            session_dir.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output = session_dir / f"{stamp}_manual_session.json"
+            output.write_text(
+                pretty({
+                    "selectedTool": state["selected_tool"],
+                    "tools": {
+                        name: self._mcp_schema_for_tool(value)
+                        for name, value in state["tools"].items()
+                    },
+                    "lastRequest": state["last_request"],
+                    "lastResponse": state["last_response"],
+                }),
+                encoding="utf-8",
+            )
+            messagebox.showinfo(
+                APP_TITLE,
+                f"Explorer session saved to:\n\n{output}",
+                parent=explorer,
+            )
+
+        tool_filter_var.trace_add("write", refresh_list)
+        tool_list.bind("<<ListboxSelect>>", show_schema)
+
+        request_text.insert(
+            "1.0",
+            pretty({
+                "instructions": (
+                    "Connect, select a tool, then load or enter a request."
+                )
+            }),
+        )
+        response_text.insert(
+            "1.0",
+            pretty({
+                "status": "No tool has been run yet."
+            }),
+        )
+        explorer.update_idletasks()
+        explorer.lift()
+        explorer.focus_force()
+
+
+    def _selected_deal_desk_item(self):
+        queue_id = self.review_queue_id.get()
+        item = self._queue_item_by_id(queue_id)
+        if not item:
+            messagebox.showinfo(
+                APP_TITLE,
+                "Select a company/contact in the Deal Desk first.",
+            )
+            return None
+        return item
+
+    def _selected_company_items(self):
+        selected = self._selected_deal_desk_item()
+        if not selected:
+            return []
+        company_id = str(selected.company_id or "").strip()
+        website = normalize_domain(selected.company_website)
+        company_name = normalize_company_name(selected.company_name)
+
+        matches = []
+        for item in self.review_queue:
+            same_company = False
+            if company_id and str(item.company_id or "").strip() == company_id:
+                same_company = True
+            elif website and normalize_domain(item.company_website) == website:
+                same_company = True
+            elif (
+                company_name
+                and normalize_company_name(item.company_name) == company_name
+            ):
+                same_company = True
+            if same_company:
+                matches.append(item)
+        return matches
+
+    def _show_email_review_tab(self):
+        item = self._selected_deal_desk_item()
+        if not item:
+            return
+        try:
+            self.review_notebook.select(0)
+        except Exception:
+            pass
+
+    def _approve_selected_company(self):
+        selected = self._selected_deal_desk_item()
+        if not selected:
+            return
+        items = self._selected_company_items()
+        if not items:
+            return
+
+        self._save_queue_edits(show_message=False)
+        analyses = [
+            self._update_item_deliverability(item)
+            for item in items
+        ]
+        below_threshold = [
+            item
+            for item, analysis in zip(items, analyses)
+            if not analysis["send_ready"]
+        ]
+
+        message = (
+            f"Approve {selected.company_name} and all "
+            f"{len(items)} associated contact record(s)?\n\n"
+            "Approval updates the Master Database and makes the company "
+            "eligible for HubSpot sync. It does not send email or enroll "
+            "any contact."
+        )
+        if below_threshold:
+            message += (
+                f"\n\n{len(below_threshold)} contact(s) are below the "
+                f"{self.minimum_inbox_score.get()} inbox-readiness threshold. "
+                "They will remain reviewable after approval."
+            )
+
+        if not messagebox.askyesno(
+            APP_TITLE,
+            message,
+            icon="question",
+        ):
+            return
+
+        now = now_iso()
+        for item in items:
+            item.status = "Approved"
+            item.updated_at = now
+
+        HistoryDB(DB_PATH).update_master_lifecycle(
+            selected.company_id,
+            selected.company_website,
+            selected.company_name,
+            "Approved",
+            notes=selected.reviewer_notes,
+        )
+
+        try:
+            key = self.intelligence_store.upsert_queue_item(selected)
+            self.intelligence_store.append_timeline(
+                key,
+                "company_approved",
+                "Company and associated contacts approved",
+                "deal_desk",
+                {
+                    "company": selected.company_name,
+                    "contact_count": len(items),
+                },
+            )
+        except Exception:
+            pass
+
+        save_outreach_queue(self.review_queue)
+        self._refresh_master_database()
+        if (
+            self.master_csv_auto_sync.get()
+            and self.master_csv_path.get().strip()
+        ):
+            self._sync_master_csv_now(show_message=False)
+        self._refresh_deal_desk()
+
+        if self.deal_tree.exists(selected.queue_id):
+            self.deal_tree.selection_set(selected.queue_id)
+            self.deal_tree.see(selected.queue_id)
+            self._load_selected_queue_item()
+
+        messagebox.showinfo(
+            APP_TITLE,
+            (
+                f"{selected.company_name} approved.\n\n"
+                f"{len(items)} contact record(s) are now approved."
+            ),
+        )
+
+    def _mark_selected_company_for_verification(self):
+        selected = self._selected_deal_desk_item()
+        if not selected:
+            return
+        items = self._selected_company_items()
+        if not items:
+            return
+
+        now = now_iso()
+        for item in items:
+            item.status = "Needs Verification"
+            item.updated_at = now
+
+        HistoryDB(DB_PATH).update_master_lifecycle(
+            selected.company_id,
+            selected.company_website,
+            selected.company_name,
+            "Needs Verification",
+            notes=selected.reviewer_notes,
+        )
+        save_outreach_queue(self.review_queue)
+        self._refresh_master_database()
+        self._refresh_deal_desk()
+
+        if self.deal_tree.exists(selected.queue_id):
+            self.deal_tree.selection_set(selected.queue_id)
+            self.deal_tree.see(selected.queue_id)
+            self._load_selected_queue_item()
+
+        messagebox.showinfo(
+            APP_TITLE,
+            (
+                f"{selected.company_name} moved to Needs Verification.\n\n"
+                f"{len(items)} contact record(s) were updated."
+            ),
+        )
+
+    def _reject_selected_company(self):
+        selected = self._selected_deal_desk_item()
+        if not selected:
+            return
+        items = self._selected_company_items()
+        if not items:
+            return
+
+        if not messagebox.askyesno(
+            APP_TITLE,
+            (
+                f"Reject {selected.company_name} and all "
+                f"{len(items)} associated contact record(s)?\n\n"
+                "The company will remain in the Master Database as rejected "
+                "so Discovery will not surface it again."
+            ),
+            icon="warning",
+        ):
+            return
+
+        now = now_iso()
+        for item in items:
+            item.status = "Rejected"
+            item.updated_at = now
+
+        HistoryDB(DB_PATH).update_master_lifecycle(
+            selected.company_id,
+            selected.company_website,
+            selected.company_name,
+            "Rejected",
+            notes=selected.reviewer_notes,
+        )
+
+        try:
+            key = self.intelligence_store.upsert_queue_item(selected)
+            self.intelligence_store.append_timeline(
+                key,
+                "company_rejected",
+                "Company and associated contacts rejected",
+                "deal_desk",
+                {
+                    "company": selected.company_name,
+                    "contact_count": len(items),
+                },
+            )
+        except Exception:
+            pass
+
+        save_outreach_queue(self.review_queue)
+        self._refresh_master_database()
+        if (
+            self.master_csv_auto_sync.get()
+            and self.master_csv_path.get().strip()
+        ):
+            self._sync_master_csv_now(show_message=False)
+        self._refresh_deal_desk()
+
+        messagebox.showinfo(
+            APP_TITLE,
+            (
+                f"{selected.company_name} rejected.\n\n"
+                f"{len(items)} contact record(s) were updated."
+            ),
+        )
+
+    def _sync_selected_company_to_hubspot(self):
+        selected = self._selected_deal_desk_item()
+        if not selected:
+            return
+        items = self._selected_company_items()
+        if not items:
+            return
+
+        approved = [
+            item
+            for item in items
+            if item.status == "Approved"
+        ]
+        if not approved:
+            messagebox.showwarning(
+                APP_TITLE,
+                (
+                    "Approve the company before syncing it to HubSpot."
+                ),
+            )
+            return
+
+        if not messagebox.askyesno(
+            APP_TITLE,
+            (
+                f"Sync {selected.company_name} and "
+                f"{len(approved)} approved contact record(s) to HubSpot?\n\n"
+                "This creates or reuses company/contact records and adds "
+                "Compass research notes. It does not enroll contacts or "
+                "send email."
+            ),
+        ):
+            return
+
+        try:
+            client = self._hubspot_client()
+            failures = []
+            for item in approved:
+                if item.hubspot_status == "Synced":
+                    continue
+                try:
+                    client.sync_item(item)
+                    HistoryDB(DB_PATH).update_master_lifecycle(
+                        item.company_id,
+                        item.company_website,
+                        item.company_name,
+                        "Synced to HubSpot",
+                        hubspot_company_id=item.hubspot_company_id,
+                    )
+                    try:
+                        key = self.intelligence_store.upsert_queue_item(item)
+                        self.intelligence_store.append_timeline(
+                            key,
+                            "hubspot_synced",
+                            "Company/contact synchronized to HubSpot",
+                            "hubspot",
+                            {
+                                "hubspot_company_id": item.hubspot_company_id,
+                                "hubspot_contact_id": item.hubspot_contact_id,
+                            },
+                        )
+                    except Exception:
+                        pass
+                except Exception as exc:
+                    item.hubspot_status = "Sync Failed"
+                    failures.append(
+                        f"{item.contact_name}: {exc}"
+                    )
+
+            save_outreach_queue(self.review_queue)
+            self._refresh_deal_desk()
+            self._refresh_master_database()
+            if hasattr(self, "_refresh_hubspot_workspace"):
+                self._refresh_hubspot_workspace()
+
+            if failures:
+                messagebox.showwarning(
+                    APP_TITLE,
+                    "Company sync completed with failures:\n\n"
+                    + "\n".join(failures[:10]),
+                )
+            else:
+                messagebox.showinfo(
+                    APP_TITLE,
+                    (
+                        f"{selected.company_name} synchronized to HubSpot.\n\n"
+                        "No contacts were enrolled and no email was sent."
+                    ),
+                )
+        except Exception as exc:
+            messagebox.showerror(
+                APP_TITLE,
+                f"HubSpot synchronization failed:\n\n{exc}",
+            )
+
 
     def _save_queue_edits(self, show_message: bool = True):
         queue_id = self.review_queue_id.get()
@@ -12226,6 +13876,7 @@ class App(tk.Tk):
             "territory_radius": self.territory_radius,
             "exclude_crm": self.exclude_crm,
             "enrich_final_contacts": self.enrich_final_contacts,
+            "smart_email_enrichment": self.smart_email_enrichment,
             "use_zoominfo_ai_research": self.use_zoominfo_ai_research,
         }
         for key, variable in mapping.items():
@@ -12544,6 +14195,7 @@ class App(tk.Tk):
             employee_max = max(employee_min, int(self.employee_max.get()))
             exclude_crm = self.exclude_crm.get()
             enrich_contacts_enabled = self.enrich_final_contacts.get()
+            smart_email_enrichment_enabled = self.smart_email_enrichment.get()
             use_ai_research = self.use_zoominfo_ai_research.get()
 
             tavily = TavilyClient(api_key=self.tavily_key.get())
@@ -13107,11 +14759,36 @@ class App(tk.Tk):
 
                         candidates: dict[str, RankedContact] = {}
                         recommendation_meta: dict[str, str] = {}
+                        zoominfo_availability_meta: dict[
+                            str, tuple[str, str]
+                        ] = {}
 
                         for contact_record in contact_records:
                             contact = contact_from_record(contact_record, prospect)
                             if not contact.contact_id:
                                 continue
+                            availability, availability_detail = (
+                                zoominfo_email_availability(contact_record)
+                            )
+                            prior = zoominfo_availability_meta.get(
+                                contact.contact_id
+                            )
+                            if (
+                                prior is None
+                                or (
+                                    prior[0] == "Unknown"
+                                    and availability != "Unknown"
+                                )
+                                or availability == "Available"
+                            ):
+                                zoominfo_availability_meta[contact.contact_id] = (
+                                    availability,
+                                    availability_detail,
+                                )
+                            contact.zoominfo_email_availability = availability
+                            contact.zoominfo_email_availability_detail = (
+                                availability_detail
+                            )
                             if contact.crm_excluded:
                                 crm_contact_exclusions += 1
                                 continue
@@ -13176,6 +14853,15 @@ class App(tk.Tk):
                             public_candidates,
                             prospect,
                         )[:max(contact_limit * 5, 12)]
+                        for finalist in finalists:
+                            availability_meta = zoominfo_availability_meta.get(
+                                finalist.contact_id
+                            )
+                            if availability_meta:
+                                (
+                                    finalist.zoominfo_email_availability,
+                                    finalist.zoominfo_email_availability_detail,
+                                ) = availability_meta
 
                         if self.use_hubspot_csv_index.get():
                             deduped_finalists = []
@@ -13212,51 +14898,355 @@ class App(tk.Tk):
                                     )
                                     candidate.phone_confidence = 75
 
-                        # Batch enrich shortlisted contacts with exact documented schema.
-                        if enrich_contacts_enabled and finalists and "enrich_contacts" in tools:
+                        # Smart ZoomInfo enrichment: free/public research first,
+                        # then paid enrichment only when raw ZoomInfo metadata
+                        # indicates that an email is available.
+                        smart_enrichment_enabled = self.smart_email_enrichment.get()
+                        enrichment_candidates: list[RankedContact] = []
+
+                        if smart_enrichment_enabled:
+                            confirmed_available = [
+                                contact
+                                for contact in finalists
+                                if (
+                                    not contact.email
+                                    and contact.zoominfo_email_availability
+                                    == "Available"
+                                )
+                            ]
+                            unknown_availability = [
+                                contact
+                                for contact in finalists
+                                if (
+                                    not contact.email
+                                    and contact.zoominfo_email_availability
+                                    == "Unknown"
+                                )
+                            ]
+                            enrichment_candidates = confirmed_available[:10]
+                            if (
+                                not enrichment_candidates
+                                and unknown_availability
+                            ):
+                                unknown_availability.sort(
+                                    key=lambda candidate: (
+                                        candidate.outreach_order
+                                        if candidate.outreach_order > 0
+                                        else 999,
+                                        -candidate.contact_score,
+                                    )
+                                )
+                                fallback_contact = unknown_availability[0]
+                                fallback_contact.zoominfo_email_availability_detail = (
+                                    fallback_contact.zoominfo_email_availability_detail
+                                    + " Targeted fallback selected because MCP "
+                                    "did not expose availability; ZoomInfo Sales "
+                                    "may still contain a visible email."
+                                ).strip()
+                                enrichment_candidates = [fallback_contact]
+
+                            logger(
+                                f"Smart ZoomInfo email check for "
+                                f"{prospect.company_name}: "
+                                f"{len(confirmed_available)} confirmed available; "
+                                f"{len(unknown_availability)} unknown; "
+                                f"{len(enrichment_candidates)} submitted."
+                            )
+                        elif enrich_contacts_enabled:
+                            enrichment_candidates = [
+                                contact
+                                for contact in finalists
+                                if (
+                                    not contact.email
+                                    and str(contact.contact_id).isdigit()
+                                )
+                            ][:10]
+
+                        if enrichment_candidates and "enrich_contacts" in tools:
                             enrich_payload = {
                                 "contacts": [
-                                    {"personId": str(contact.contact_id)}
-                                    for contact in finalists[:10]
-                                    if str(contact.contact_id).isdigit()
+                                    {
+                                        "firstName": contact.first_name,
+                                        "lastName": contact.last_name,
+                                        "companyName": contact.company_name,
+                                        "jobTitle": contact.title,
+                                    }
+                                    for contact in enrichment_candidates
                                 ],
                                 "requiredFields": [
-                                    "firstName", "lastName", "email", "phone", "mobilePhone",
-                                    "directPhoneDoNotCall", "mobilePhoneDoNotCall", "jobTitle",
-                                    "jobFunction", "managementLevel", "externalUrls",
-                                    "contactAccuracyScore", "zoominfoCompanyId", "companyName",
+                                    "firstName", "lastName", "email", "phone",
+                                    "mobilePhone", "directPhoneDoNotCall",
+                                    "mobilePhoneDoNotCall", "jobTitle",
+                                    "jobFunction", "managementLevel",
+                                    "externalUrls", "contactAccuracyScore",
+                                    "zoominfoCompanyId", "companyName",
                                 ],
                                 "userIntent": (
-                                    "Retrieve verified business contact details for shortlisted "
-                                    "Darwill prospecting decision-makers."
+                                    "Retrieve verified business emails only for "
+                                    "shortlisted Darwill contacts whose ZoomInfo "
+                                    "search results indicate email availability. "
+                                    "Match primarily by first name, last name, "
+                                    "company name, and job title."
                                 ),
                             }
-                            if not enrich_payload["contacts"]:
-                                enrich_payload = None
                             try:
-                                if enrich_payload is None:
-                                    raise RuntimeError(
-                                        "No ZoomInfo contact IDs available for enrichment."
+                                for contact in enrichment_candidates:
+                                    contact.zoominfo_enrichment_attempted = True
+                                    contact.zoominfo_enrichment_result = (
+                                        "Submitted after availability confirmation "
+                                        f"using {contact.zoominfo_person_id_source}"
                                     )
-                                enriched = mcp.run(mcp.call("enrich_contacts", enrich_payload))
-                                (LOG_DIR / f"enriched_contacts_{prospect.company_id}.json").write_text(
-                                    json.dumps(enriched, indent=2, default=str), encoding="utf-8"
+                                diagnostics_root = (
+                                    LOG_DIR / "email_diagnostics"
                                 )
-                                enriched_records = records_from_payload(enriched)
+                                diagnostics_root.mkdir(
+                                    parents=True,
+                                    exist_ok=True,
+                                )
+                                request_stamp = datetime.now().strftime(
+                                    "%Y%m%d_%H%M%S"
+                                )
+                                company_slug = re.sub(
+                                    r"[^a-z0-9]+",
+                                    "_",
+                                    prospect.company_name.lower(),
+                                ).strip("_")
+                                batch_dir = (
+                                    diagnostics_root
+                                    / f"{request_stamp}_{company_slug}"
+                                )
+                                batch_dir.mkdir(
+                                    parents=True,
+                                    exist_ok=True,
+                                )
+                                (
+                                    batch_dir / "enrich_tool_schema.json"
+                                ).write_text(
+                                    json.dumps(
+                                        tools.get("enrich_contacts", {}),
+                                        indent=2,
+                                        default=str,
+                                    ),
+                                    encoding="utf-8",
+                                )
+                                (
+                                    batch_dir / "enrich_request.json"
+                                ).write_text(
+                                    json.dumps(
+                                        enrich_payload,
+                                        indent=2,
+                                        default=str,
+                                    ),
+                                    encoding="utf-8",
+                                )
+
+                                enriched = mcp.run(
+                                    mcp.call("enrich_contacts", enrich_payload)
+                                )
+                                (
+                                    batch_dir / "enrich_response.json"
+                                ).write_text(
+                                    json.dumps(
+                                        enriched,
+                                        indent=2,
+                                        default=str,
+                                    ),
+                                    encoding="utf-8",
+                                )
+                                (
+                                    LOG_DIR
+                                    / f"enriched_contacts_{prospect.company_id}.json"
+                                ).write_text(
+                                    json.dumps(enriched, indent=2, default=str),
+                                    encoding="utf-8",
+                                )
                                 enriched_by_id = {}
-                                for enriched_record in enriched_records:
-                                    enriched_contact = contact_from_record(enriched_record, prospect)
+                                enrichment_records = records_from_payload(enriched)
+                                for record in enrichment_records:
+                                    enriched_contact = contact_from_record(
+                                        record,
+                                        prospect,
+                                    )
                                     if enriched_contact.contact_id:
-                                        enriched_by_id[enriched_contact.contact_id] = enriched_contact
-                                for contact in finalists:
-                                    enriched_contact = enriched_by_id.get(contact.contact_id)
-                                    if enriched_contact:
-                                        contact.email = enriched_contact.email or contact.email
-                                        contact.direct_phone = enriched_contact.direct_phone or contact.direct_phone
-                                        contact.mobile_phone = enriched_contact.mobile_phone or contact.mobile_phone
-                                        contact.linkedin_url = enriched_contact.linkedin_url or contact.linkedin_url
+                                        enriched_by_id[
+                                            enriched_contact.contact_id
+                                        ] = enriched_contact
+
+                                successful_records = (
+                                    enrichment_result_records(enriched)
+                                )
+                                payload_email, payload_email_path = (
+                                    recursive_email_value(enriched)
+                                )
+                                all_email_fields = collect_email_diagnostics(
+                                    enriched
+                                )
+
+                                recovered_count = 0
+                                diagnostic_summaries: list[str] = []
+                                for contact in enrichment_candidates:
+                                    result_record = best_enrichment_record(
+                                        enriched,
+                                        contact,
+                                    )
+                                    if result_record:
+                                        apply_enrichment_record(
+                                            contact,
+                                            result_record,
+                                        )
+                                    else:
+                                        result = enriched_by_id.get(
+                                            contact.contact_id
+                                        )
+                                        if result:
+                                            contact.email = (
+                                                result.email or contact.email
+                                            )
+                                            contact.direct_phone = (
+                                                result.direct_phone
+                                                or contact.direct_phone
+                                            )
+                                            contact.mobile_phone = (
+                                                result.mobile_phone
+                                                or contact.mobile_phone
+                                            )
+                                            contact.linkedin_url = (
+                                                result.linkedin_url
+                                                or contact.linkedin_url
+                                            )
+                                    if (
+                                        not contact.email
+                                        and len(enrichment_candidates) == 1
+                                        and payload_email
+                                    ):
+                                        contact.email = payload_email
+                                        contact.email_recovery_method = (
+                                            "ZoomInfo payload fallback: "
+                                            + payload_email_path
+                                        )
+
+                                    failure_class = classify_enrichment_failure(
+                                        enriched,
+                                        person_id=str(contact.contact_id),
+                                        extracted_email=contact.email,
+                                    )
+                                    email_field_lines = [
+                                        (
+                                            f"{field['path']}="
+                                            f"{field['value'] or '<empty>'}"
+                                        )
+                                        for field in all_email_fields
+                                    ]
+                                    diagnostic_summaries.append(
+                                        "\n".join([
+                                            (
+                                                f"Contact: "
+                                                f"{contact.first_name} "
+                                                f"{contact.last_name}"
+                                            ).strip(),
+                                            f"Title: {contact.title}",
+                                            (
+                                                "ZoomInfo person ID: "
+                                                f"{contact.contact_id}"
+                                            ),
+                                            (
+                                                "Outer MCP record ID: "
+                                                f"{contact.zoominfo_outer_record_id}"
+                                            ),
+                                            (
+                                                "Person ID source: "
+                                                f"{contact.zoominfo_person_id_source}"
+                                            ),
+                                            (
+                                                "Availability before enrichment: "
+                                                f"{contact.zoominfo_email_availability}"
+                                            ),
+                                            (
+                                                "Availability evidence: "
+                                                f"{contact.zoominfo_email_availability_detail}"
+                                            ),
+                                            "Enrichment called: YES",
+                                            (
+                                                "Email returned: "
+                                                f"{contact.email or 'NO'}"
+                                            ),
+                                            (
+                                                "Result classification: "
+                                                f"{failure_class}"
+                                            ),
+                                            "Email-related response fields:",
+                                            *(
+                                                email_field_lines
+                                                or ["<none found>"]
+                                            ),
+                                        ])
+                                    )
+
+                                    if contact.email:
+                                        recovered_count += 1
+                                        contact.email_status = (
+                                            "ZoomInfo enrichment returned"
+                                        )
+                                        contact.email_confidence = max(
+                                            contact.email_confidence, 98
+                                        )
+                                        contact.email_verification_status = (
+                                            "ZoomInfo Enriched"
+                                        )
+                                        contact.email_recovery_method = (
+                                            "ZoomInfo paid enrichment after "
+                                            "availability confirmation"
+                                        )
+                                        contact.zoominfo_enrichment_result = (
+                                            "Verified email recovered"
+                                        )
+                                    else:
+                                        contact.zoominfo_enrichment_result = (
+                                            "Availability was indicated, but "
+                                            "enrichment returned no email"
+                                        )
+                                (
+                                    batch_dir / "diagnostic_summary.txt"
+                                ).write_text(
+                                    ("\n\n" + ("-" * 72) + "\n\n").join(
+                                        diagnostic_summaries
+                                    ),
+                                    encoding="utf-8",
+                                )
+                                logger(
+                                    f"Email diagnostics saved to {batch_dir}."
+                                )
+                                logger(
+                                    f"Smart enrichment recovered "
+                                    f"{recovered_count} email(s) from "
+                                    f"{len(enrichment_candidates)} confirmed-"
+                                    f"available contact(s)."
+                                )
                             except Exception as exc:
-                                logger(f"Contact enrichment warning for {prospect.company_name}: {exc}")
+                                try:
+                                    if "batch_dir" in locals():
+                                        (
+                                            batch_dir / "enrichment_error.txt"
+                                        ).write_text(
+                                            str(exc),
+                                            encoding="utf-8",
+                                        )
+                                except Exception:
+                                    pass
+                                for contact in enrichment_candidates:
+                                    contact.zoominfo_enrichment_result = (
+                                        f"Enrichment failed: {exc}"
+                                    )
+                                logger(
+                                    f"Contact enrichment warning for "
+                                    f"{prospect.company_name}: {exc}"
+                                )
+                        elif smart_enrichment_enabled:
+                            logger(
+                                f"No confirmed-available ZoomInfo emails for "
+                                f"{prospect.company_name}; no enrichment credits "
+                                f"were submitted."
+                            )
 
                         # Parallel Tavily research against the actual ZoomInfo shortlist.
                         worker_count = max(1, min(8, int(self.research_workers.get())))
@@ -13484,6 +15474,7 @@ class App(tk.Tk):
                 "employee_range": f"{employee_min}-{employee_max}",
                 "crm_ai_checks_enabled": use_ai_research and exclude_crm,
                 "contact_enrichment_enabled": enrich_contacts_enabled,
+                "smart_email_enrichment_enabled": smart_email_enrichment_enabled,
                 "public_decision_maker_discovery": self.discover_public_contacts.get(),
                 "deep_contact_recovery": self.deep_contact_recovery.get(),
                 "deep_recovery_contact_limit": self.deep_recovery_contact_limit.get(),
