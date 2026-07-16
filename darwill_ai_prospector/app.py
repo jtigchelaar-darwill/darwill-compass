@@ -63,13 +63,18 @@ from .services.zoominfo_adapter import (
     ZoomInfoAdapter,
     ZoomInfoAdapterError,
 )
+from .services.company_intelligence import (
+    build_company_intelligence,
+    build_email_resolution,
+    format_company_intelligence,
+)
 from .services.intelligence_store import IntelligenceStore
 from .services.email_intelligence import (
     build_email_intelligence,
     format_email_intelligence_report,
 )
 
-APP_TITLE = "Darwill Compass 8.1 — ZoomInfo Adapter"
+APP_TITLE = "Darwill Compass 8.2.2 — Company Intelligence Stable"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -122,7 +127,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "8.1"
+PRODUCT_VERSION = "8.2.2"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -5591,6 +5596,12 @@ class App(tk.Tk):
         self.workspace_status_var = tk.StringVar(
             value="Ready · Proven engine preserved"
         )
+        self.company_intelligence_vars = {
+            "fit": tk.StringVar(value="Not evaluated"),
+            "confidence": tk.StringVar(value="—"),
+            "email_status": tk.StringVar(value="Not evaluated"),
+            "next_action": tk.StringVar(value="Review company"),
+        }
         self._build()
         self._load_settings()
         self._load_profiles()
@@ -5921,7 +5932,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 8.1",
+            text="VERSION 8.2.2",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -6151,7 +6162,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 8.1",
+            text="Darwill Compass 8.2.2",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -8154,7 +8165,7 @@ class App(tk.Tk):
             style="Muted.TLabel",
         ).pack(side="left", padx=(10, 0))
 
-        self.company_intelligence_vars = {
+        self.company_intelligence_vars.update({
             "qualification": tk.StringVar(value="—"),
             "residential": tk.StringVar(value="—"),
             "size": tk.StringVar(value="—"),
@@ -8167,7 +8178,7 @@ class App(tk.Tk):
             "darwill_angle": tk.StringVar(
                 value="Select a company to calculate the recommended Darwill angle."
             ),
-        }
+        })
 
         company_score_row = tk.Frame(company_tab, bg=SURFACE)
         company_score_row.pack(fill="x", pady=(0, 8))
@@ -8522,6 +8533,79 @@ class App(tk.Tk):
             height=12,
         )
         self.contact_intelligence_text.pack(fill="both", expand=True)
+
+        required_company_intelligence_keys = {
+            "fit": "Not evaluated",
+            "confidence": "—",
+            "email_status": "Not evaluated",
+            "next_action": "Review company",
+        }
+        for variable_key, default_value in (
+            required_company_intelligence_keys.items()
+        ):
+            if variable_key not in self.company_intelligence_vars:
+                self.company_intelligence_vars[variable_key] = tk.StringVar(
+                    value=default_value
+                )
+
+        company_intelligence_header = ttk.Frame(
+            acquisition_tab,
+            style="Card.TFrame",
+        )
+        company_intelligence_header.pack(fill="x", pady=(0, 8))
+        ttk.Label(
+            company_intelligence_header,
+            text="Company Intelligence Decision",
+            style="SectionTitle.TLabel",
+        ).pack(side="left")
+        ttk.Label(
+            company_intelligence_header,
+            text=(
+                "Explainable company fit, risk, email state, and recommended "
+                "next action from stored research."
+            ),
+            style="Muted.TLabel",
+        ).pack(side="left", padx=(10, 0))
+
+        company_decision_row = tk.Frame(acquisition_tab, bg=SURFACE)
+        company_decision_row.pack(fill="x", pady=(0, 8))
+        for column, (label, key, background, foreground) in enumerate([
+            ("Company Fit", "fit", "#EDF5FC", ACCENT),
+            ("Confidence", "confidence", "#FFF4DB", WARNING),
+            ("Email State", "email_status", "#F2EEFA", "#6545A4"),
+            ("Next Action", "next_action", "#ECF8F2", SUCCESS),
+        ]):
+            card = tk.Frame(
+                company_decision_row,
+                bg=background,
+                padx=9,
+                pady=7,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+            )
+            card.grid(
+                row=0,
+                column=column,
+                sticky="nsew",
+                padx=(0 if column == 0 else 4, 0),
+            )
+            tk.Label(
+                card,
+                text=label.upper(),
+                bg=background,
+                fg=MUTED,
+                font=("Segoe UI Semibold", 6),
+            ).pack(anchor="w")
+            tk.Label(
+                card,
+                textvariable=self.company_intelligence_vars[key],
+                bg=background,
+                fg=foreground,
+                font=("Segoe UI Semibold", 10),
+                wraplength=190,
+                justify="left",
+            ).pack(anchor="w", pady=(2, 0))
+            company_decision_row.columnconfigure(column, weight=1)
 
         email_decision_header = ttk.Frame(
             acquisition_tab,
@@ -11082,6 +11166,22 @@ class App(tk.Tk):
         self.contact_intelligence_text.delete("1.0", "end")
         self.contact_intelligence_text.insert("1.0", intelligence)
         self.contact_acquisition_text.delete("1.0", "end")
+        company_intelligence = build_company_intelligence(item)
+        email_resolution = build_email_resolution(item)
+        if hasattr(self, "company_intelligence_vars"):
+            self.company_intelligence_vars["fit"].set(
+                company_intelligence.fit_summary
+            )
+            self.company_intelligence_vars["confidence"].set(
+                f"{company_intelligence.confidence}%"
+            )
+            self.company_intelligence_vars["email_status"].set(
+                email_resolution.label
+            )
+            self.company_intelligence_vars["next_action"].set(
+                email_resolution.recommended_action
+            )
+
         email_intelligence = build_email_intelligence(item)
         if hasattr(self, "email_intelligence_vars"):
             self.email_intelligence_vars["public_status"].set(
@@ -11104,6 +11204,23 @@ class App(tk.Tk):
             prospect_key = self.intelligence_store.upsert_queue_item(item)
             self.intelligence_store.record_standard_evidence(
                 prospect_key, item, email_intelligence
+            )
+            self.intelligence_store.add_evidence(
+                prospect_key,
+                "company_intelligence",
+                "fit_summary",
+                company_intelligence.fit_summary,
+                confidence=company_intelligence.confidence,
+                verification_status="computed",
+            )
+            self.intelligence_store.add_evidence(
+                prospect_key,
+                "email_resolution",
+                email_resolution.status,
+                email_resolution.explanation,
+                contact_key=self.intelligence_store.contact_key(item),
+                confidence=email_resolution.confidence,
+                verification_status="computed",
             )
             self.intelligence_store.append_timeline(
                 prospect_key,
@@ -11174,7 +11291,12 @@ class App(tk.Tk):
                 item.contact_zoominfo_enrichment_result
                 or "No enrichment attempted."
             )
-            + "\nDiagnostic log folder: "
+            + "\n\n"
+            + format_company_intelligence(
+                company_intelligence,
+                email_resolution,
+            )
+            + "\n\nDiagnostic log folder: "
             + str(LOG_DIR / "email_diagnostics")
             + "\nUnknown availability policy: enrich only the highest-ranked "
             + "missing-email contact, not every finalist."
