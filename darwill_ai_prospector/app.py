@@ -75,7 +75,7 @@ from .services.email_intelligence import (
     format_email_intelligence_report,
 )
 
-APP_TITLE = "Darwill Compass 8.6 — Expandable Tab Workspace"
+APP_TITLE = "Darwill Compass 8.7 — Complete Approval Workflow"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -128,7 +128,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "8.6"
+PRODUCT_VERSION = "8.7"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -1708,6 +1708,17 @@ def load_outreach_queue() -> list[ReviewQueueItem]:
                 "contact_zoominfo_retry_message": "",
                 "contact_zoominfo_enriched_company_id": "",
                 "contact_zoominfo_enrichment_warnings": "",
+                "approval_locked": False,
+                "approved_at": "",
+                "approved_contact_id": "",
+                "approved_contact_name": "",
+                "approved_contact_title": "",
+                "approved_contact_email": "",
+                "approved_strategy": "",
+                "approved_subject_line": "",
+                "approved_email_body": "",
+                "approved_reviewer_notes": "",
+                "approved_inbox_readiness_score": 0,
             }
             for key, value in defaults.items():
                 clean.setdefault(key, value)
@@ -2765,6 +2776,17 @@ class ReviewQueueItem:
     deliverability_recommendations: str = ""
     subject_variant: str = "A"
     outcome: str = "Not Sent"
+    approval_locked: bool = False
+    approved_at: str = ""
+    approved_contact_id: str = ""
+    approved_contact_name: str = ""
+    approved_contact_title: str = ""
+    approved_contact_email: str = ""
+    approved_strategy: str = ""
+    approved_subject_line: str = ""
+    approved_email_body: str = ""
+    approved_reviewer_notes: str = ""
+    approved_inbox_readiness_score: int = 0
     created_at: str = ""
     updated_at: str = ""
 
@@ -2812,6 +2834,31 @@ class HistoryDB:
                 reason TEXT,
                 updated_at TEXT
             )
+        """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS company_approvals(
+                approval_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                prospect_key TEXT NOT NULL,
+                company_id TEXT,
+                company_name TEXT NOT NULL,
+                website TEXT,
+                selected_queue_id TEXT,
+                contact_id TEXT,
+                contact_name TEXT,
+                contact_title TEXT,
+                contact_email TEXT,
+                strategy TEXT,
+                subject_line TEXT,
+                email_body TEXT,
+                reviewer_notes TEXT,
+                inbox_readiness_score INTEGER DEFAULT 0,
+                approved_at TEXT NOT NULL,
+                approval_status TEXT DEFAULT 'Approved'
+            )
+        """)
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_company_approvals_prospect
+            ON company_approvals(prospect_key, approved_at)
         """)
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS master_prospects(
@@ -3744,6 +3791,88 @@ class HistoryDB:
         self.conn.commit()
         return key
 
+    def record_company_approval(
+        self,
+        item: ReviewQueueItem,
+        approved_at: str,
+    ) -> int:
+        """Persist the exact approval snapshot independently of queue edits."""
+        prospect_key = self.prospect_key(
+            item.company_id,
+            item.company_website,
+            item.company_name,
+        )
+        cursor = self.conn.execute(
+            """INSERT INTO company_approvals(
+                   prospect_key, company_id, company_name, website,
+                   selected_queue_id, contact_id, contact_name,
+                   contact_title, contact_email, strategy, subject_line,
+                   email_body, reviewer_notes, inbox_readiness_score,
+                   approved_at, approval_status
+               ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                prospect_key,
+                item.company_id,
+                item.company_name,
+                item.company_website,
+                item.queue_id,
+                item.contact_id,
+                item.contact_name,
+                item.contact_title,
+                item.contact_email,
+                item.recommended_strategy,
+                item.subject_line,
+                item.email_body,
+                item.reviewer_notes,
+                int(item.inbox_readiness_score or 0),
+                approved_at,
+                "Approved",
+            ),
+        )
+        self.conn.commit()
+        return int(cursor.lastrowid)
+
+    def latest_company_approval(
+        self,
+        company_id: str,
+        website: str,
+        company_name: str,
+    ) -> dict[str, Any] | None:
+        prospect_key = self.prospect_key(
+            company_id,
+            website,
+            company_name,
+        )
+        row = self.conn.execute(
+            """SELECT approval_id, selected_queue_id, contact_id,
+                      contact_name, contact_title, contact_email,
+                      strategy, subject_line, email_body, reviewer_notes,
+                      inbox_readiness_score, approved_at, approval_status
+               FROM company_approvals
+               WHERE prospect_key=?
+               ORDER BY approval_id DESC
+               LIMIT 1""",
+            (prospect_key,),
+        ).fetchone()
+        if not row:
+            return None
+        keys = [
+            "approval_id",
+            "selected_queue_id",
+            "contact_id",
+            "contact_name",
+            "contact_title",
+            "contact_email",
+            "strategy",
+            "subject_line",
+            "email_body",
+            "reviewer_notes",
+            "inbox_readiness_score",
+            "approved_at",
+            "approval_status",
+        ]
+        return dict(zip(keys, row))
+
     def update_master_lifecycle(
         self,
         company_id: str,
@@ -3763,6 +3892,12 @@ class HistoryDB:
         self.conn.execute(
             """UPDATE master_prospects SET
                    lifecycle_status=?,
+                   approved_at=CASE
+                       WHEN ?='Approved' AND COALESCE(approved_at,'')=''
+                       THEN ?
+                       ELSE approved_at
+                   END,
+                   last_reviewed_at=?,
                    hubspot_company_id=CASE WHEN ?<>'' THEN ? ELSE hubspot_company_id END,
                    sequence_status=CASE WHEN ?<>'' THEN ? ELSE sequence_status END,
                    meeting_status=CASE WHEN ?<>'' THEN ? ELSE meeting_status END,
@@ -3772,6 +3907,9 @@ class HistoryDB:
                WHERE prospect_key=?""",
             (
                 status,
+                status,
+                now_iso(),
+                now_iso(),
                 hubspot_company_id, hubspot_company_id,
                 sequence_status, sequence_status,
                 meeting_status, meeting_status,
@@ -5597,6 +5735,9 @@ class App(tk.Tk):
         self.workspace_status_var = tk.StringVar(
             value="Ready · Proven engine preserved"
         )
+        self.approval_snapshot_status = tk.StringVar(
+            value="Not approved"
+        )
         self.company_intelligence_vars = {
             "fit": tk.StringVar(value="Not evaluated"),
             "confidence": tk.StringVar(value="—"),
@@ -5936,7 +6077,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 8.6",
+            text="VERSION 8.7",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -6166,7 +6307,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 8.6",
+            text="Darwill Compass 8.7",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -7831,6 +7972,13 @@ class App(tk.Tk):
             fg=NAVY,
             font=("Segoe UI Semibold", 8),
         ).pack(side="left", padx=(0, 10))
+        tk.Label(
+            workflow_bar,
+            textvariable=self.approval_snapshot_status,
+            bg="#EAF3FB",
+            fg=MUTED,
+            font=("Segoe UI", 8),
+        ).pack(side="left", padx=(0, 12))
 
         ttk.Button(
             workflow_bar,
@@ -8169,6 +8317,38 @@ class App(tk.Tk):
             sticky="ew",
             pady=(0, 6),
         )
+        approval_snapshot_card = tk.Frame(
+            email_tab,
+            bg="#ECF8F2",
+            padx=10,
+            pady=8,
+            highlightthickness=1,
+            highlightbackground=BORDER,
+        )
+        approval_snapshot_card.grid(
+            row=0,
+            column=0,
+            sticky="ew",
+            pady=(0, 8),
+        )
+        tk.Label(
+            approval_snapshot_card,
+            text="APPROVAL SNAPSHOT",
+            bg="#ECF8F2",
+            fg=SUCCESS,
+            font=("Segoe UI Semibold", 7),
+        ).pack(anchor="w")
+        tk.Label(
+            approval_snapshot_card,
+            textvariable=self.approval_snapshot_status,
+            bg="#ECF8F2",
+            fg=TEXT,
+            font=("Segoe UI", 9),
+            justify="left",
+            anchor="w",
+            wraplength=600,
+        ).pack(fill="x", anchor="w", pady=(2, 0))
+
         ttk.Label(
             email_header,
             text="Approved Email",
@@ -8187,7 +8367,7 @@ class App(tk.Tk):
             style="Card.TFrame",
         )
         subject_frame.grid(
-            row=1,
+            row=2,
             column=0,
             sticky="ew",
             pady=(0, 6),
@@ -8197,18 +8377,18 @@ class App(tk.Tk):
             subject_frame,
             text="Approved Subject",
             style="Card.TLabel",
-        ).grid(row=0, column=0, sticky="w", pady=(0, 3))
+        ).grid(row=1, column=0, sticky="w", pady=(0, 3))
         ttk.Entry(
             subject_frame,
             textvariable=self.review_subject,
-        ).grid(row=1, column=0, sticky="ew")
+        ).grid(row=2, column=0, sticky="ew")
 
         ttk.Label(
             email_tab,
             text="Approved Email Body",
             style="Card.TLabel",
         ).grid(
-            row=2,
+            row=3,
             column=0,
             sticky="w",
             pady=(0, 3),
@@ -8219,7 +8399,7 @@ class App(tk.Tk):
             style="Card.TFrame",
         )
         email_body_frame.grid(
-            row=3,
+            row=4,
             column=0,
             sticky="ew",
         )
@@ -8251,7 +8431,7 @@ class App(tk.Tk):
             style="Card.TFrame",
         )
         notes_frame.grid(
-            row=4,
+            row=5,
             column=0,
             sticky="ew",
             pady=(7, 0),
@@ -8261,11 +8441,11 @@ class App(tk.Tk):
             notes_frame,
             text="Reviewer Notes",
             style="Card.TLabel",
-        ).grid(row=0, column=0, sticky="w", pady=(0, 3))
+        ).grid(row=1, column=0, sticky="w", pady=(0, 3))
         ttk.Entry(
             notes_frame,
             textvariable=self.review_notes,
-        ).grid(row=1, column=0, sticky="ew")
+        ).grid(row=2, column=0, sticky="ew")
 
         company_header = ttk.Frame(
             company_tab,
@@ -11187,20 +11367,42 @@ class App(tk.Tk):
             "synced": 0,
             "enrolled": 0,
         }
+        company_states: dict[str, dict[str, bool]] = {}
+        for queue_item in self.review_queue:
+            company_key = (
+                str(queue_item.company_id or "").strip()
+                or normalize_domain(queue_item.company_website)
+                or normalize_company_name(queue_item.company_name)
+            )
+            state = company_states.setdefault(
+                company_key,
+                {
+                    "pending": False,
+                    "verification": False,
+                    "approved": False,
+                    "synced": False,
+                    "enrolled": False,
+                },
+            )
+            state["pending"] |= queue_item.status == "Pending Review"
+            state["verification"] |= (
+                queue_item.status == "Needs Verification"
+                or queue_item.contact_email_verification_status in {
+                    "Needs Verification",
+                    "Missing",
+                }
+            )
+            state["approved"] |= queue_item.status == "Approved"
+            state["synced"] |= queue_item.hubspot_status == "Synced"
+            state["enrolled"] |= (
+                queue_item.enrollment_status == "Enrolled"
+            )
+        for state in company_states.values():
+            for counter_name in counts:
+                if state[counter_name]:
+                    counts[counter_name] += 1
+
         for item in self.review_queue:
-            if item.status == "Pending Review":
-                counts["pending"] += 1
-            if item.contact_email_verification_status in {
-                "Needs Verification",
-                "Missing",
-            }:
-                counts["verification"] += 1
-            if item.status == "Approved":
-                counts["approved"] += 1
-            if item.hubspot_status == "Synced":
-                counts["synced"] += 1
-            if item.enrollment_status == "Enrolled":
-                counts["enrolled"] += 1
 
             if selected_filter != "All":
                 if (
@@ -11318,6 +11520,18 @@ class App(tk.Tk):
         self.review_confidence.set(
             f"Review status: {item.status}"
         )
+        if item.approved_at:
+            chosen = item.approved_contact_name or item.contact_name
+            chosen_email = (
+                item.approved_contact_email
+                or "email unresolved"
+            )
+            self.approval_snapshot_status.set(
+                f"Approved {item.approved_at[:10]} · "
+                f"{chosen} · {chosen_email}"
+            )
+        else:
+            self.approval_snapshot_status.set("Not approved")
         self.review_subject.set(item.subject_line)
         self.review_notes.set(item.reviewer_notes)
         self.review_email_body.delete("1.0", "end")
@@ -12079,44 +12293,81 @@ class App(tk.Tk):
         if not items:
             return
 
+        # Capture the exact visible subject, body, and notes before validation.
         self._save_queue_edits(show_message=False)
-        analyses = [
-            self._update_item_deliverability(item)
-            for item in items
-        ]
-        below_threshold = [
-            item
-            for item, analysis in zip(items, analyses)
-            if not analysis["send_ready"]
-        ]
+        selected = self._queue_item_by_id(selected.queue_id) or selected
+        analysis = self._update_item_deliverability(selected)
 
-        message = (
-            f"Approve {selected.company_name} and all "
-            f"{len(items)} associated contact record(s)?\n\n"
-            "Approval updates the Master Database and makes the company "
-            "eligible for HubSpot sync. It does not send email or enroll "
-            "any contact."
+        validation_issues = []
+        if not selected.contact_name.strip():
+            validation_issues.append("No selected contact name")
+        if not selected.recommended_strategy.strip():
+            validation_issues.append("No final outreach strategy")
+        if not selected.subject_line.strip():
+            validation_issues.append("Approved subject is blank")
+        if not selected.email_body.strip():
+            validation_issues.append("Approved email body is blank")
+        if not selected.contact_email.strip():
+            validation_issues.append("Selected contact has no verified email")
+
+        confirmation = (
+            f"Approve {selected.company_name} using this primary approval "
+            f"snapshot?\n\n"
+            f"Contact: {selected.contact_name} — {selected.contact_title}\n"
+            f"Email: {selected.contact_email or 'Missing'}\n"
+            f"Strategy: {selected.recommended_strategy or 'Missing'}\n"
+            f"Subject: {selected.subject_line or 'Missing'}\n"
+            f"Inbox readiness: {analysis['inbox_readiness_score']}/100\n\n"
+            f"All {len(items)} company contact record(s) will move to "
+            "Approved. The exact selected contact and outreach draft will be "
+            "saved as an immutable approval snapshot.\n\n"
+            "Approval does not sync, enroll, or send anything."
         )
-        if below_threshold:
-            message += (
-                f"\n\n{len(below_threshold)} contact(s) are below the "
-                f"{self.minimum_inbox_score.get()} inbox-readiness threshold. "
-                "They will remain reviewable after approval."
+        if validation_issues:
+            confirmation += (
+                "\n\nItems requiring attention:\n• "
+                + "\n• ".join(validation_issues)
+            )
+        if not analysis["send_ready"]:
+            confirmation += (
+                f"\n\nThe draft is below the configured inbox-readiness "
+                f"threshold of {self.minimum_inbox_score.get()}."
             )
 
         if not messagebox.askyesno(
             APP_TITLE,
-            message,
-            icon="question",
+            confirmation,
+            icon="warning" if validation_issues else "question",
         ):
             return
 
-        now = now_iso()
+        approved_at = now_iso()
+        approval_db = HistoryDB(DB_PATH)
+
+        # Save the exact approval snapshot on every company queue record.
+        # Only the selected item is marked as the locked chosen contact.
         for item in items:
             item.status = "Approved"
-            item.updated_at = now
+            item.approved_at = approved_at
+            item.approved_contact_id = selected.contact_id
+            item.approved_contact_name = selected.contact_name
+            item.approved_contact_title = selected.contact_title
+            item.approved_contact_email = selected.contact_email
+            item.approved_strategy = selected.recommended_strategy
+            item.approved_subject_line = selected.subject_line
+            item.approved_email_body = selected.email_body
+            item.approved_reviewer_notes = selected.reviewer_notes
+            item.approved_inbox_readiness_score = int(
+                analysis["inbox_readiness_score"]
+            )
+            item.approval_locked = item.queue_id == selected.queue_id
+            item.updated_at = approved_at
 
-        HistoryDB(DB_PATH).update_master_lifecycle(
+        approval_id = approval_db.record_company_approval(
+            selected,
+            approved_at,
+        )
+        approval_db.update_master_lifecycle(
             selected.company_id,
             selected.company_website,
             selected.company_name,
@@ -12129,11 +12380,21 @@ class App(tk.Tk):
             self.intelligence_store.append_timeline(
                 key,
                 "company_approved",
-                "Company and associated contacts approved",
+                "Company approved with locked contact and outreach snapshot",
                 "deal_desk",
                 {
+                    "approval_id": approval_id,
                     "company": selected.company_name,
                     "contact_count": len(items),
+                    "selected_queue_id": selected.queue_id,
+                    "selected_contact": selected.contact_name,
+                    "selected_email": selected.contact_email,
+                    "strategy": selected.recommended_strategy,
+                    "subject": selected.subject_line,
+                    "inbox_readiness_score": analysis[
+                        "inbox_readiness_score"
+                    ],
+                    "approved_at": approved_at,
                 },
             )
         except Exception:
@@ -12157,7 +12418,11 @@ class App(tk.Tk):
             APP_TITLE,
             (
                 f"{selected.company_name} approved.\n\n"
-                f"{len(items)} contact record(s) are now approved."
+                f"Approval ID: {approval_id}\n"
+                f"Chosen contact: {selected.contact_name}\n"
+                f"Approved at: {approved_at}\n"
+                f"{len(items)} company contact record(s) updated.\n\n"
+                "No HubSpot sync, enrollment, or email send occurred."
             ),
         )
 
