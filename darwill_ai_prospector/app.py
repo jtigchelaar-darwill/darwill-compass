@@ -59,13 +59,17 @@ from .services.zoominfo_enrichment import (
     enrichment_result_records,
     recursive_email_value,
 )
+from .services.zoominfo_adapter import (
+    ZoomInfoAdapter,
+    ZoomInfoAdapterError,
+)
 from .services.intelligence_store import IntelligenceStore
 from .services.email_intelligence import (
     build_email_intelligence,
     format_email_intelligence_report,
 )
 
-APP_TITLE = "Darwill Compass 8.0 — Modular Architecture"
+APP_TITLE = "Darwill Compass 8.1 — ZoomInfo Adapter"
 SERVICE = "DarwillProspectIntelligence"
 BASE_DIR = Path(__file__).resolve().parent
 SETTINGS_FILE = BASE_DIR / "settings.json"
@@ -118,7 +122,7 @@ SIDEBAR_SECTION = "#0A243D"
 SIDEBAR_HOVER = "#123A5F"
 SIDEBAR_ACTIVE = "#1F6FD1"
 CONTENT_BG = "#EEF3F8"
-PRODUCT_VERSION = "8.0"
+PRODUCT_VERSION = "8.1"
 DEVELOPER_NAME = "Jon Tigchelaar"
 
 CONTACT_SOURCE_PRIORITY = {
@@ -5917,7 +5921,7 @@ class App(tk.Tk):
         right_header.pack(side="right", fill="y", padx=(0, 24))
         tk.Label(
             right_header,
-            text="VERSION 8.0",
+            text="VERSION 8.1",
             bg=SIDEBAR,
             fg="#79A9D1",
             font=("Segoe UI Semibold", 8),
@@ -6147,7 +6151,7 @@ class App(tk.Tk):
         footer.pack(side="bottom", fill="x", padx=12, pady=14)
         tk.Label(
             footer,
-            text="Darwill Compass 8.0",
+            text="Darwill Compass 8.1",
             bg=SIDEBAR_SECTION,
             fg=WHITE,
             anchor="w",
@@ -11242,14 +11246,8 @@ class App(tk.Tk):
 
         try:
             logger = lambda msg: None
-            oauth = OAuthManager(
-                self.client_id.get(),
-                self.client_secret.get(),
-                logger,
-            )
-            token = oauth.get_access_token()
-            mcp = ZoomInfoMCP(token, logger)
-            tools = mcp.run(mcp.discover())
+            adapter = self._zoominfo_adapter(logger)
+            tools = adapter.discover_tools()
             if "enrich_contacts" not in tools:
                 raise RuntimeError(
                     "ZoomInfo MCP does not expose enrich_contacts."
@@ -11317,9 +11315,17 @@ class App(tk.Tk):
             )
             self.update_idletasks()
 
-            response = mcp.run(
-                mcp.call("enrich_contacts", enrich_payload)
+            adapter_result = adapter.call(
+                "enrich_contacts",
+                enrich_payload,
+                retry_count=0,
             )
+            response = adapter_result.response
+            if adapter_result.classification == "limit_exceeded":
+                raise ZoomInfoAdapterError(
+                    "ZoomInfo MCP enrichment limit exceeded. Compass will "
+                    "not retry enrichment in this session."
+                )
             (batch_dir / "enrich_response.json").write_text(
                 json.dumps(response, indent=2, default=str),
                 encoding="utf-8",
@@ -11512,6 +11518,21 @@ class App(tk.Tk):
         )
         token = oauth.get_access_token()
         return ZoomInfoMCP(token, logger)
+
+    def _zoominfo_adapter(self, logger=None):
+        """Return a centralized ZoomInfo MCP adapter."""
+        adapter_logger = logger or (lambda message: None)
+        oauth = OAuthManager(
+            self.client_id.get(),
+            self.client_secret.get(),
+            adapter_logger,
+        )
+        token = oauth.get_access_token()
+        return ZoomInfoAdapter(
+            ZoomInfoMCP(token, adapter_logger),
+            log_root=LOG_DIR,
+            logger=adapter_logger,
+        )
 
     @staticmethod
     def _mcp_schema_for_tool(tool_value):
@@ -13481,7 +13502,12 @@ class App(tk.Tk):
             oauth = OAuthManager(self.client_id.get(), self.client_secret.get(), logger)
             token = oauth.get_access_token()
             mcp = ZoomInfoMCP(token, logger)
-            tools = mcp.run(mcp.discover())
+            zoominfo_adapter = ZoomInfoAdapter(
+                mcp,
+                log_root=LOG_DIR,
+                logger=logger,
+            )
+            tools = zoominfo_adapter.discover_tools()
             (LOG_DIR / "mcp_tools.json").write_text(json.dumps(tools, indent=2), encoding="utf-8")
             self.mcp_tools = tools
             self.events.put(("log", f"Connected. ZoomInfo exposed {len(tools)} MCP tools."))
@@ -14353,6 +14379,16 @@ class App(tk.Tk):
                                 )
                             ][:10]
 
+                        if (
+                            "zoominfo_adapter" in locals()
+                            and zoominfo_adapter.enrichment_blocked
+                        ):
+                            logger(
+                                "ZoomInfo enrichment blocked for this run: "
+                                + zoominfo_adapter.enrichment_block_reason
+                            )
+                            enrichment_candidates = []
+
                         if enrichment_candidates and "enrich_contacts" in tools:
                             enrich_payload = {
                                 "contacts": [
@@ -14431,9 +14467,21 @@ class App(tk.Tk):
                                     encoding="utf-8",
                                 )
 
-                                enriched = mcp.run(
-                                    mcp.call("enrich_contacts", enrich_payload)
+                                adapter_result = zoominfo_adapter.call(
+                                    "enrich_contacts",
+                                    enrich_payload,
+                                    retry_count=0,
                                 )
+                                enriched = adapter_result.response
+                                if (
+                                    adapter_result.classification
+                                    == "limit_exceeded"
+                                ):
+                                    logger(
+                                        "ZoomInfo enrichment limit exceeded. "
+                                        "Remaining enrichment calls will be "
+                                        "skipped for this run."
+                                    )
                                 (
                                     batch_dir / "enrich_response.json"
                                 ).write_text(
